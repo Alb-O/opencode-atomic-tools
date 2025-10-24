@@ -45,7 +45,8 @@
 
 ## Writing and Communication Style
 
-To communitcate with user or write docs/commits:
+To communitcate with user or write docs/descriptions/commits:
 
 - PREFER functional, realist style
 - AVOID flowery decoration and self-congratulatory back-patting
+- When entering the `description` arg for `write` or `edit` tools, ALWAYS refer to specific APIs/functions/vars (do not be vague).
