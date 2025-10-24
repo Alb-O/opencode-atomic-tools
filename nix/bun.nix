@@ -1,5 +1,17 @@
 # Set of Bun packages to install
 {
+  "@opencode-ai/plugin" = {
+    out_path = "@opencode-ai/plugin";
+    name = "@opencode-ai/plugin@0.15.14";
+    url = "https://registry.npmjs.org/@opencode-ai/plugin/-/plugin-0.15.14.tgz";
+    hash = "sha512-Ybs6UZxVkrRlGdrnL58H7qxBxzIfC6/DI82Pc6XU6gQeeZE+gmXEVYYX5QXWct3Kc3brL54zgdlj6ONU7KLP6g==";
+  };
+  "@opencode-ai/sdk" = {
+    out_path = "@opencode-ai/sdk";
+    name = "@opencode-ai/sdk@0.15.14";
+    url = "https://registry.npmjs.org/@opencode-ai/sdk/-/sdk-0.15.14.tgz";
+    hash = "sha512-ITJePjIq5GChtyPa/6+7oIB7UYaXlCiM0LvOWnZdZFq4UOggW6K7hRqKSmf8WMPR2nc1EfHP2RIwgdynK3cG2A==";
+  };
   "@types/bun" = {
     out_path = "@types/bun";
     name = "@types/bun@1.2.4";
@@ -39,5 +51,11 @@
     name = "undici-types@6.20.0";
     url = "https://registry.npmjs.org/undici-types/-/undici-types-6.20.0.tgz";
     hash = "sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==";
+  };
+  "zod" = {
+    out_path = "zod";
+    name = "zod@4.1.8";
+    url = "https://registry.npmjs.org/zod/-/zod-4.1.8.tgz";
+    hash = "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ==";
   };
 }
