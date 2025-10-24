@@ -22,7 +22,6 @@ export default async function atomicToolsPlugin(input: PluginInput) {
         result.output = note.output;
         result.metadata = note.metadata;
       }
-      console.log("plugin tool.execute.after", details, typeof result, result && Object.keys(result));
     },
   };
 }

@@ -48,8 +48,6 @@ export const AtomicEdit: Plugin = async () => {
       });
 
       const curr = await Bun.file(file).text();
-      console.log("atomic_edit context keys:", Object.keys(context as unknown as Record<string, unknown>));
-      console.log("atomic_edit context metadata type:", typeof (context as unknown as { metadata?: unknown }).metadata);
       const body = (() => {
         if (all) {
           const replaced = curr.split(old).join(value);
