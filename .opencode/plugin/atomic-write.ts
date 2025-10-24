@@ -23,6 +23,7 @@ export default async function writeAndCommitPlugin() {
         .describe("The content to write to the file"),
       description: tool.schema
         .string()
+        .optional()
         .describe(
           "One-line desc of what edit you're making and why; used for commit message (keep it technical)",
         ),
@@ -30,7 +31,10 @@ export default async function writeAndCommitPlugin() {
     async execute(args, context) {
       const file = args.filePath;
       const body = args.content;
-      const desc = args.description;
+
+      const relSource = path.relative(process.cwd(), file) || file;
+      const rel = relSource.startsWith("..") ? path.basename(file) : relSource;
+      const desc = args.description || `Create ${rel}`;
 
       const branch = await createDeterministicBranch({
         sessionID: context.sessionID,
@@ -39,9 +43,6 @@ export default async function writeAndCommitPlugin() {
 
       await Bun.write(file, body);
       const diff = await commitFile(file, desc);
-
-      const relSource = path.relative(process.cwd(), file) || file;
-      const rel = relSource.startsWith("..") ? path.basename(file) : relSource;
 
       const title = rel;
       const output = `File written and committed: ${rel} on branch ${branch}`;

@@ -31,6 +31,7 @@ export const AtomicEdit: Plugin = async () => {
         .describe("Replace all occurrences of oldString (default: false)"),
       description: tool.schema
         .string()
+        .optional()
         .describe(
           "One-line desc of what edit you're making and why; used for commit message (keep it technical)",
         ),
@@ -40,7 +41,14 @@ export const AtomicEdit: Plugin = async () => {
       const old = args.oldString;
       const value = args.newString;
       const all = args.replaceAll ?? false;
-      const desc = args.description;
+      const relSource = path.relative(process.cwd(), file) || file;
+      const rel = (() => {
+        if (relSource.startsWith("..")) {
+          return path.basename(file);
+        }
+        return relSource;
+      })();
+      const desc = args.description || `Update ${rel}`;
 
       const branch = await createDeterministicBranch({
         sessionID: context.sessionID,
@@ -67,14 +75,6 @@ export const AtomicEdit: Plugin = async () => {
           );
         }
         return `${curr.slice(0, index)}${value}${curr.slice(index + old.length)}`;
-      })();
-
-      const relSource = path.relative(process.cwd(), file) || file;
-      const rel = (() => {
-        if (relSource.startsWith("..")) {
-          return path.basename(file);
-        }
-        return relSource;
       })();
 
       await Bun.write(file, body);
