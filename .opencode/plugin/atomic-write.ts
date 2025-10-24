@@ -1,15 +1,10 @@
 import { tool } from "@opencode-ai/plugin";
-import { createHash } from "crypto";
 import { writeFile } from "fs/promises";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
 
 export default async function writeAndCommitPlugin() {
-  const atomicWrite = tool({
-    description:
-      "Write a file and atomic commit",
+  const atomic_write = tool({
+    description: "Write a file and atomic commit",
     args: {
       filePath: tool.schema
         .string()
@@ -28,36 +23,17 @@ export default async function writeAndCommitPlugin() {
       const { sessionID, agent } = context;
 
       try {
-        // Create deterministic branch name based on session/agent info
-        const hash = createHash("sha256")
-          .update(`${agent}-${sessionID}`)
-          .digest("hex")
-          .substring(0, 8);
-
-        const branchName = `opencode/${agent}-${hash}`;
-
-        // Check current branch and switch if needed
-        const { stdout: currentBranch } = await execAsync(
-          "git branch --show-current",
-        );
-
-        if (currentBranch.trim() !== branchName) {
-          try {
-            await execAsync(`git checkout -b ${branchName}`);
-          } catch (error) {
-            // Branch might already exist, just checkout
-            await execAsync(`git checkout ${branchName}`);
-          }
-        }
+        // Create deterministic branch and switch to it
+        const branchName = await createDeterministicBranch({
+          sessionID,
+          agent,
+        });
 
         // Write the file (replicating write tool behavior)
         await writeFile(filePath, content, "utf8");
 
-        // Stage the specific file
-        await execAsync(`git add "${filePath}"`);
-
-        // Commit with the provided description
-        await execAsync(`git commit -m "${description}"`);
+        // Stage and commit the change
+        await commitFile(filePath, description);
 
         return `File written and committed: ${filePath} on branch ${branchName}`;
       } catch (error) {
@@ -68,7 +44,7 @@ export default async function writeAndCommitPlugin() {
 
   return {
     tool: {
-      atomicWrite,
+      atomic_write,
     },
   };
 }

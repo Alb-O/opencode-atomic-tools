@@ -1,5 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "tools": {
+    "write": false,
+    "bash": false,
+    "edit": false,
+    "patch": false
+  },
   "permission": {
     "bash": {
       "npx *": "deny",
