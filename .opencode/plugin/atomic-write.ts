@@ -1,6 +1,8 @@
 import { tool } from "@opencode-ai/plugin";
 import path from "path";
-import { createAgentBranch, commitFile } from "../utils/git-helpers.ts";
+import { getAgentIdentity } from "../utils/identity-helper.ts";
+import { ensureBranchExists, worktreeAdd, commitFile } from "../utils/git-helpers.ts";
+import { mkdir } from "fs/promises";
 import { setNote } from "../utils/edit-notes.ts";
 
 type MetaInput = {
@@ -36,16 +38,29 @@ export default async function writeAndCommitPlugin() {
       const rel = relSource.startsWith("..") ? path.basename(file) : relSource;
       const desc = args.description || `Create ${rel}`;
 
-      const { branchName, userName, userEmail } = await createAgentBranch({
-        sessionID: context.sessionID,
-        agent: context.agent,
-      });
+      const identity = await getAgentIdentity({ sessionID: context.sessionID, agent: context.agent });
+      const { branchName, userName, userEmail, middleName, hash } = identity as any;
 
-      await Bun.write(file, body);
-      const diff = await commitFile(file, desc, userName, userEmail);
+      // Worktree path per session
+      const worktreeName = `${middleName}-${hash}`;
+      const worktreePath = path.join(".agent", "worktrees", worktreeName);
+
+      // Ensure branch exists and add worktree (no-op if already present)
+      await ensureBranchExists(branchName);
+      try {
+        await worktreeAdd(worktreePath, branchName);
+      } catch (e) {
+        // ignore if already exists
+      }
+
+      const fullPath = path.join(worktreePath, rel);
+      await mkdir(path.dirname(fullPath), { recursive: true });
+      await Bun.write(fullPath, body);
+
+      const diff = await commitFile(rel, desc, userName, userEmail, worktreePath);
 
       const title = rel;
-      const output = `File written and committed: ${rel} on branch ${branchName}`;
+  const output = `File written and committed: ${rel} on branch ${branchName}`;
       const meta = { filePath: rel, diff };
 
       const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;

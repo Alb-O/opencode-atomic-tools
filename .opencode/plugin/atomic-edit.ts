@@ -1,7 +1,9 @@
 import { type Plugin, tool } from "@opencode-ai/plugin";
 import path from "path";
 import { createTwoFilesPatch } from "diff";
-import { createAgentBranch, commitFile } from "../utils/git-helpers.ts";
+import { getAgentIdentity } from "../utils/identity-helper.ts";
+import { ensureBranchExists, worktreeAdd, commitFile } from "../utils/git-helpers.ts";
+import { mkdir } from "fs/promises";
 import { setNote } from "../utils/edit-notes.ts";
 
 type MetaInput = {
@@ -50,12 +52,25 @@ export const AtomicEdit: Plugin = async () => {
       })();
       const desc = args.description || `Update ${rel}`;
 
-      const { branchName, userName, userEmail } = await createAgentBranch({
-        sessionID: context.sessionID,
-        agent: context.agent,
-      });
+      const identity = await getAgentIdentity({ sessionID: context.sessionID, agent: context.agent });
+      const { branchName, userName, userEmail, middleName, hash } = identity as any;
 
-      const curr = await Bun.file(file).text();
+      // Worktree path per session
+      const worktreeName = `${middleName}-${hash}`;
+      const worktreePath = path.join(".agent", "worktrees", worktreeName);
+
+      // Ensure branch exists and add worktree
+      await ensureBranchExists(branchName);
+      try {
+        await worktreeAdd(worktreePath, branchName);
+      } catch (e) {
+        // ignore if already exists
+      }
+
+      const fullPath = path.join(worktreePath, rel);
+      await mkdir(path.dirname(fullPath), { recursive: true });
+
+      const curr = await Bun.file(fullPath).text();
       const body = (() => {
         if (all) {
           const replaced = curr.split(old).join(value);
@@ -77,9 +92,9 @@ export const AtomicEdit: Plugin = async () => {
         return `${curr.slice(0, index)}${value}${curr.slice(index + old.length)}`;
       })();
 
-  await Bun.write(file, body);
-      const raw = createTwoFilesPatch(file, file, curr, body);
-      const diff = (() => {
+    await Bun.write(path.join(worktreePath, rel), body);
+    const raw = createTwoFilesPatch(file, file, curr, body);
+    const diff = (() => {
         const lines = raw.split("\n");
         const content = lines.filter(
           (line) =>
@@ -112,7 +127,7 @@ export const AtomicEdit: Plugin = async () => {
           })
           .join("\n");
       })();
-  await commitFile(file, desc, userName, userEmail);
+  await commitFile(rel, desc, userName, userEmail, worktreePath);
 
   const title = rel;
   const output = `File edited and committed: ${rel} on branch ${branchName}`;
