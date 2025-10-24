@@ -1,9 +1,18 @@
-import { tool } from "@opencode-ai/plugin";
-import { readFile, writeFile } from "fs/promises";
-import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
+import { type Plugin, tool } from "@opencode-ai/plugin";
+import path from "path";
 import { createTwoFilesPatch } from "diff";
+import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
 
-export default async function editAndCommitPlugin() {
+type MetaInput = {
+  title?: string;
+  metadata?: {
+    filePath: string;
+    diff: string;
+  };
+  output?: string;
+};
+
+export const AtomicEdit: Plugin = async () => {
   const atomic_edit = tool({
     description:
       "Apply exact string replacement edits to a file and atomic commit",
@@ -27,75 +36,67 @@ export default async function editAndCommitPlugin() {
         ),
     },
     async execute(args, context) {
-      const { filePath, oldString, newString, replaceAll, description } = args;
-      const { sessionID, agent } = context;
+      const file = args.filePath;
+      const old = args.oldString;
+      const value = args.newString;
+      const all = args.replaceAll ?? false;
+      const desc = args.description;
 
-      try {
-        // Create deterministic branch and switch to it
-        const branchName = await createDeterministicBranch({
-          sessionID,
-          agent,
-        });
+      const branch = await createDeterministicBranch({
+        sessionID: context.sessionID,
+        agent: context.agent,
+      });
 
-        // Read the current file content
-        const currentContent = await readFile(filePath, "utf8");
-
-        // Apply the edit
-        let newContent: string;
-        if (replaceAll) {
-          newContent = currentContent.split(oldString).join(newString);
-          if (newContent === currentContent) {
-            throw new Error(`oldString not found in content: ${oldString}`);
+      const curr = await Bun.file(file).text();
+      const body = (() => {
+        if (all) {
+          const replaced = curr.split(old).join(value);
+          if (replaced === curr) {
+            throw new Error(`oldString not found in content: ${old}`);
           }
-        } else {
-          const index = currentContent.indexOf(oldString);
-          if (index === -1) {
-            throw new Error(`oldString not found in content: ${oldString}`);
-          }
-          const secondIndex = currentContent.indexOf(oldString, index + 1);
-          if (secondIndex !== -1) {
-            throw new Error(
-              `oldString found multiple times and requires more code context to uniquely identify the intended match. Either provide a larger string with more surrounding context to make it unique or use replaceAll to change every instance of oldString.`,
-            );
-          }
-
-          newContent =
-            currentContent.substring(0, index) +
-            newString +
-            currentContent.substring(index + oldString.length);
+          return replaced;
         }
+        const index = curr.indexOf(old);
+        if (index === -1) {
+          throw new Error(`oldString not found in content: ${old}`);
+        }
+        const again = curr.indexOf(old, index + 1);
+        if (again !== -1) {
+          throw new Error(
+            `oldString found multiple times and requires more code context to uniquely identify the intended match. Either provide a larger string with more surrounding context to make it unique or use replaceAll to change every instance of oldString.`,
+          );
+        }
+        return `${curr.slice(0, index)}${value}${curr.slice(index + old.length)}`;
+      })();
 
-        // Create a unified diff patch from the old and new contents
-        // (this is what the TUI's diff parser/renderer expects)
-        const diffPatch = createTwoFilesPatch(filePath, filePath, currentContent, newContent);
+      const relSource = path.relative(process.cwd(), file) || file;
+      const rel = (() => {
+        if (relSource.startsWith("..")) {
+          return path.basename(file);
+        }
+        return relSource;
+      })();
 
-        // Write the modified content back to the file
-        await writeFile(filePath, newContent, "utf8");
+      const diff = createTwoFilesPatch(
+        `a/${rel}`,
+        `b/${rel}`,
+        curr,
+        body,
+      );
 
-        // Stage and commit the change (keep committing behavior)
-        // commitFile may be untyped JS; cast to any to avoid TS issues
-        const commitResult: any = await commitFile(filePath, description);
-        // (we don't rely on commitResult for the diff because we already constructed diffPatch)
+      await Bun.write(file, body);
+      await commitFile(file, desc);
 
-        // Build guaranteed-string outputs
-        const out = `File edited and committed: ${filePath} on branch ${branchName}`;
+      const title = `File edited and committed: ${file}`;
+      const output = `${title} on branch ${branch}`;
+      const meta = { filePath: rel, diff };
 
-        // Send metadata to host runtime so clients (TUI / web / desktop) can pick it up.
-        // Some plugin type defs might not include context.metadata, so cast to any at call site.
-        (context as any).metadata?.({
-          title: out,
-          metadata: {
-            filePath,
-            diff: diffPatch,
-          },
-        });
-
-        // Return a plain string (matches execute return type expected by your environment)
-        return out;
-      } catch (error) {
-        const msg = error && error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
-        throw new Error(`Failed to edit and commit file: ${msg}`);
+      const hook = (context as unknown as { metadata?: (input: MetaInput) => void }).metadata;
+      if (typeof hook === "function") {
+        hook({ title, metadata: meta, output });
       }
+
+      return JSON.stringify({ title, metadata: meta, output });
     },
   });
 
@@ -104,4 +105,6 @@ export default async function editAndCommitPlugin() {
       atomic_edit,
     },
   };
-}
+};
+
+export default AtomicEdit;
