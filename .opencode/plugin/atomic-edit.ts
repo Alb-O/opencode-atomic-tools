@@ -1,8 +1,8 @@
 import { type Plugin, tool } from "@opencode-ai/plugin";
 import path from "path";
 import { createTwoFilesPatch } from "diff";
-import { createAgentBranch, commitFile } from "./shared/git-helpers.js";
-import { setNote } from "./shared/edit-notes.js";
+import { createAgentBranch, commitFile } from "./shared/git-helpers.ts";
+import { setNote } from "./shared/edit-notes.ts";
 
 type MetaInput = {
   title?: string;

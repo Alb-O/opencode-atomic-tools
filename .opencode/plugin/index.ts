@@ -1,6 +1,6 @@
-import writeAndCommitPlugin from "./atomic-write.js";
-import editAndCommitPlugin from "./atomic-edit.js";
-import { takeNote } from "./shared/edit-notes.js";
+import writeAndCommitPlugin from "./atomic-write.ts";
+import editAndCommitPlugin from "./atomic-edit.ts";
+import { takeNote } from "./shared/edit-notes.ts";
 import type { PluginInput } from "@opencode-ai/plugin";
 
 export default async function atomicToolsPlugin(input: PluginInput) {

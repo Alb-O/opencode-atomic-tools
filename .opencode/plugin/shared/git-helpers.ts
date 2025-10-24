@@ -1,33 +1,16 @@
-import { createHash } from "crypto";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { writeFile } from "fs/promises";
-import { faker } from "@faker-js/faker";
+import { GitContext, getAgentIdentity } from "./identity-helper";
 
 const execAsync = promisify(exec);
-
-export interface GitContext {
-  sessionID: string;
-  agent: string;
-}
 
 export async function createAgentBranch(
   context: GitContext,
 ): Promise<{ branchName: string; userName: string; userEmail: string }> {
-  const hash = createHash("sha256")
-    .update(`${context.sessionID}`)
-    .digest("hex")
-    .substring(0, 8);
+  const { branchName, userName, userEmail } = await getAgentIdentity(context);
 
-  const seed = parseInt(hash, 16);
-  faker.seed(seed);
-  const middleName = faker.person.middleName().toLowerCase();
-  const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
-  const userEmail = `${middleName}@opencode.ai`;
-
-  const branchName = `opencode/${middleName}-${hash}`;
-
-  // Check current branch and create/switch to middleName-sessionID branch
+  // Check current branch and create/switch to agent branch
   const { stdout: currentBranch } = await execAsync(
     "git branch --show-current",
   );
