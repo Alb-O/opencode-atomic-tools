@@ -9,7 +9,6 @@
 - AVOID using `any` type
 - AVOID `let` statements
 - PREFER single word variable names where possible
-- AVOID using node, use bun instead
 - Use as many bun apis as possible like Bun.file()
 
 ## Tool Calling
@@ -43,3 +42,10 @@
     }
 }
 ```
+
+## Writing and Communication Style
+
+To communitcate with user or write docs/commits:
+
+- PREFER functional, realist style
+- AVOID flowery decoration and self-congratulatory back-patting
