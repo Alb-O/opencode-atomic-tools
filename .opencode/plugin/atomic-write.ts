@@ -1,6 +1,15 @@
 import { tool } from "@opencode-ai/plugin";
-import { writeFile } from "fs/promises";
+import path from "path";
 import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
+import { setNote } from "./shared/edit-notes.js";
+
+type MetaInput = {
+  title?: string;
+  metadata?: {
+    filePath: string;
+    diff: string;
+  };
+};
 
 export default async function writeAndCommitPlugin() {
   const atomic_write = tool({
@@ -19,39 +28,45 @@ export default async function writeAndCommitPlugin() {
         ),
     },
     async execute(args, context) {
-      const { filePath, content, description } = args;
-      const { sessionID, agent } = context;
+      const file = args.filePath;
+      const body = args.content;
+      const desc = args.description;
 
-      try {
-        // Create deterministic branch and switch to it
-        const branchName = await createDeterministicBranch({
-          sessionID,
-          agent,
-        });
+      const branch = await createDeterministicBranch({
+        sessionID: context.sessionID,
+        agent: context.agent,
+      });
 
-        // Write the file (replicating write tool behavior)
-        await writeFile(filePath, content, "utf8");
+      await Bun.write(file, body);
+      const diff = await commitFile(file, desc);
 
-        // Stage and commit the change and get diff
-        const diff = await commitFile(filePath, description);
+      const relSource = path.relative(process.cwd(), file) || file;
+      const rel = relSource.startsWith("..") ? path.basename(file) : relSource;
 
-        return {
-          metadata: {
-            filePath,
-            diff
-          },
-          title: `File written and committed: ${filePath} on branch ${branchName}`,
-          output: `File written and committed: ${filePath} on branch ${branchName}`
-        };
-      } catch (error) {
-        throw new Error(`Failed to write and commit file: ${error.message}`);
+      const title = rel;
+      const output = `File written and committed: ${rel} on branch ${branch}`;
+      const meta = { filePath: rel, diff };
+
+      const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;
+      if (typeof hook === "function") {
+        const done = hook({ title, metadata: meta });
+        if (done && typeof (done as { then?: unknown }).then === "function") {
+          await done;
+        }
       }
+
+      const call = (context as unknown as { callID?: string }).callID;
+      if (call) {
+        setNote(call, { title, output, metadata: meta });
+      }
+
+      return output;
     },
   });
 
   return {
     tool: {
-      atomic_write,
+      write: atomic_write,
     },
   };
 }

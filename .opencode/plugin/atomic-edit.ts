@@ -2,6 +2,7 @@ import { type Plugin, tool } from "@opencode-ai/plugin";
 import path from "path";
 import { createTwoFilesPatch } from "diff";
 import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
+import { setNote } from "./shared/edit-notes.js";
 
 type MetaInput = {
   title?: string;
@@ -9,7 +10,6 @@ type MetaInput = {
     filePath: string;
     diff: string;
   };
-  output?: string;
 };
 
 export const AtomicEdit: Plugin = async () => {
@@ -48,6 +48,8 @@ export const AtomicEdit: Plugin = async () => {
       });
 
       const curr = await Bun.file(file).text();
+      console.log("atomic_edit context keys:", Object.keys(context as unknown as Record<string, unknown>));
+      console.log("atomic_edit context metadata type:", typeof (context as unknown as { metadata?: unknown }).metadata);
       const body = (() => {
         if (all) {
           const replaced = curr.split(old).join(value);
@@ -77,32 +79,67 @@ export const AtomicEdit: Plugin = async () => {
         return relSource;
       })();
 
-      const diff = createTwoFilesPatch(
-        `a/${rel}`,
-        `b/${rel}`,
-        curr,
-        body,
-      );
-
       await Bun.write(file, body);
+      const raw = createTwoFilesPatch(file, file, curr, body);
+      const diff = (() => {
+        const lines = raw.split("\n");
+        const content = lines.filter(
+          (line) =>
+            (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) &&
+            !line.startsWith("---") &&
+            !line.startsWith("+++"),
+        );
+        if (content.length === 0) return raw;
+        const indent = content.reduce((size, line) => {
+          const text = line.slice(1);
+          if (text.trim().length === 0) return size;
+          const match = text.match(/^(\s*)/);
+          if (!match) return size;
+          if (match[1].length < size) return match[1].length;
+          return size;
+        }, Number.POSITIVE_INFINITY);
+        if (!Number.isFinite(indent) || indent === 0) return raw;
+        return lines
+          .map((line) => {
+            if (
+              (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) &&
+              !line.startsWith("---") &&
+              !line.startsWith("+++")
+            ) {
+              const prefix = line[0];
+              const text = line.slice(1);
+              return `${prefix}${text.slice(indent)}`;
+            }
+            return line;
+          })
+          .join("\n");
+      })();
       await commitFile(file, desc);
 
-      const title = `File edited and committed: ${file}`;
-      const output = `${title} on branch ${branch}`;
+      const title = rel;
+      const output = `File edited and committed: ${rel} on branch ${branch}`;
       const meta = { filePath: rel, diff };
 
-      const hook = (context as unknown as { metadata?: (input: MetaInput) => void }).metadata;
+      const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;
       if (typeof hook === "function") {
-        hook({ title, metadata: meta, output });
+        const done = hook({ title, metadata: meta });
+        if (done && typeof (done as { then?: unknown }).then === "function") {
+          await done;
+        }
       }
 
-      return JSON.stringify({ title, metadata: meta, output });
+      const call = (context as unknown as { callID?: string }).callID;
+      if (call) {
+        setNote(call, { title, output, metadata: meta });
+      }
+
+      return output;
     },
   });
 
   return {
     tool: {
-      atomic_edit,
+      edit: atomic_edit,
     },
   };
 };
