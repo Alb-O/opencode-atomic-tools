@@ -1,6 +1,7 @@
 import { tool } from "@opencode-ai/plugin";
 import { readFile, writeFile } from "fs/promises";
 import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
+import { createTwoFilesPatch } from "diff";
 
 export default async function editAndCommitPlugin() {
   const atomic_edit = tool({
@@ -40,25 +41,18 @@ export default async function editAndCommitPlugin() {
         const currentContent = await readFile(filePath, "utf8");
 
         // Apply the edit
-        let newContent;
+        let newContent: string;
         if (replaceAll) {
-          // Replace all occurrences
           newContent = currentContent.split(oldString).join(newString);
-
-          // Check if any replacements were made
           if (newContent === currentContent) {
             throw new Error(`oldString not found in content: ${oldString}`);
           }
         } else {
-          // Replace first occurrence only
           const index = currentContent.indexOf(oldString);
           if (index === -1) {
             throw new Error(`oldString not found in content: ${oldString}`);
           }
-
-          // Check for multiple occurrences when replaceAll is false
-          const firstIndex = currentContent.indexOf(oldString);
-          const secondIndex = currentContent.indexOf(oldString, firstIndex + 1);
+          const secondIndex = currentContent.indexOf(oldString, index + 1);
           if (secondIndex !== -1) {
             throw new Error(
               `oldString found multiple times and requires more code context to uniquely identify the intended match. Either provide a larger string with more surrounding context to make it unique or use replaceAll to change every instance of oldString.`,
@@ -71,15 +65,36 @@ export default async function editAndCommitPlugin() {
             currentContent.substring(index + oldString.length);
         }
 
+        // Create a unified diff patch from the old and new contents
+        // (this is what the TUI's diff parser/renderer expects)
+        const diffPatch = createTwoFilesPatch(filePath, filePath, currentContent, newContent);
+
         // Write the modified content back to the file
         await writeFile(filePath, newContent, "utf8");
 
-        // Stage and commit the change
-        await commitFile(filePath, description);
+        // Stage and commit the change (keep committing behavior)
+        // commitFile may be untyped JS; cast to any to avoid TS issues
+        const commitResult: any = await commitFile(filePath, description);
+        // (we don't rely on commitResult for the diff because we already constructed diffPatch)
 
-        return `File edited and committed: ${filePath} on branch ${branchName}`;
+        // Build guaranteed-string outputs
+        const out = `File edited and committed: ${filePath} on branch ${branchName}`;
+
+        // Send metadata to host runtime so clients (TUI / web / desktop) can pick it up.
+        // Some plugin type defs might not include context.metadata, so cast to any at call site.
+        (context as any).metadata?.({
+          title: out,
+          metadata: {
+            filePath,
+            diff: diffPatch,
+          },
+        });
+
+        // Return a plain string (matches execute return type expected by your environment)
+        return out;
       } catch (error) {
-        throw new Error(`Failed to edit and commit file: ${error.message}`);
+        const msg = error && error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+        throw new Error(`Failed to edit and commit file: ${msg}`);
       }
     },
   });

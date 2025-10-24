@@ -32,10 +32,17 @@ export default async function writeAndCommitPlugin() {
         // Write the file (replicating write tool behavior)
         await writeFile(filePath, content, "utf8");
 
-        // Stage and commit the change
-        await commitFile(filePath, description);
+        // Stage and commit the change and get diff
+        const diff = await commitFile(filePath, description);
 
-        return `File written and committed: ${filePath} on branch ${branchName}`;
+        return {
+          metadata: {
+            filePath,
+            diff
+          },
+          title: `File written and committed: ${filePath} on branch ${branchName}`,
+          output: `File written and committed: ${filePath} on branch ${branchName}`
+        };
       } catch (error) {
         throw new Error(`Failed to write and commit file: ${error.message}`);
       }

@@ -4,6 +4,10 @@ Example project created with `bun init` to show usage of `bun2nix`, a fast bun p
 
 This project builds a simple hello world binary that logs `Hello via Bun!` to the console.
 
+## Atomic Tools Test
+
+This section was added to test the atomic_edit functionality.
+
 To try it out use `nix run .`.
 
 ## Notable files

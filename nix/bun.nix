@@ -36,6 +36,12 @@
     url = "https://registry.npmjs.org/bun-types/-/bun-types-1.2.4.tgz";
     hash = "sha512-nDPymR207ZZEoWD4AavvEaa/KZe/qlrbMSchqpQwovPZCKc7pwMoENjEtHgMKaAjJhy+x6vfqSBA1QU3bJgs0Q==";
   };
+  "diff" = {
+    out_path = "diff";
+    name = "diff@8.0.2";
+    url = "https://registry.npmjs.org/diff/-/diff-8.0.2.tgz";
+    hash = "sha512-sSuxWU5j5SR9QQji/o2qMvqRNYRDOcBTgsJ/DeCf4iSN4gW+gNMXM7wFIP+fdXZxoNiAnHUTGjCr+TSWXdRDKg==";
+  };
   "typescript" = {
     out_path = "typescript";
     binaries = {

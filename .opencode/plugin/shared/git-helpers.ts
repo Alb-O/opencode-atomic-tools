@@ -40,12 +40,17 @@ export async function createDeterministicBranch(
 export async function commitFile(
   filePath: string,
   description: string,
-): Promise<void> {
+): Promise<string> {
   // Stage the specific file
   await execAsync(`git add "${filePath}"`);
 
+  // Get the diff of staged changes before committing
+  const { stdout: diff } = await execAsync(`git diff --cached "${filePath}"`);
+
   // Commit with the provided description
   await execAsync(`git commit -m "${description}"`);
+
+  return diff;
 }
 
 export async function atomicWriteAndCommit(
