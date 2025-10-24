@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { writeFile } from "fs/promises";
+import { faker } from "@faker-js/faker";
 
 const execAsync = promisify(exec);
 
@@ -10,45 +11,55 @@ export interface GitContext {
   agent: string;
 }
 
-export async function createDeterministicBranch(
+export async function createAgentBranch(
   context: GitContext,
-): Promise<string> {
+): Promise<{ branchName: string; userName: string; userEmail: string }> {
   const hash = createHash("sha256")
-    .update(`${context.agent}-${context.sessionID}`)
+    .update(`${context.sessionID}`)
     .digest("hex")
     .substring(0, 8);
 
-  const branchName = `opencode/${context.agent}-${hash}`;
+  const seed = parseInt(hash, 16);
+  faker.seed(seed);
+  const middleName = faker.person.middleName().toLowerCase();
+  const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
+  const userEmail = `${middleName}@opencode.ai`;
 
-  // Check current branch and switch if needed
+  const branchName = `opencode/${middleName}-${hash}`;
+
+  // Check current branch and create/switch to middleName-sessionID branch
   const { stdout: currentBranch } = await execAsync(
     "git branch --show-current",
   );
-
   if (currentBranch.trim() !== branchName) {
     try {
       await execAsync(`git checkout -b ${branchName}`);
     } catch (error) {
-      // Branch might already exist, just checkout
       await execAsync(`git checkout ${branchName}`);
     }
   }
-
-  return branchName;
+  return { branchName, userName, userEmail };
 }
 
 export async function commitFile(
   filePath: string,
   description: string,
+  userName?: string,
+  userEmail?: string,
 ): Promise<string> {
-  // Stage the specific file
+  // Stage the touched file only
   await execAsync(`git add "${filePath}"`);
 
   // Get the diff of staged changes before committing
   const { stdout: diff } = await execAsync(`git diff --cached "${filePath}"`);
 
-  // Commit with the provided description
-  await execAsync(`git commit -m "${description}"`);
+  // If a temporary user name/email were provided use git -c to apply them
+  // only to this commit command so we don't persist changes to git config.
+  const userArgs = userName && userEmail
+    ? `-c user.name="${userName}" -c user.email="${userEmail}" `
+    : "";
+
+  await execAsync(`git ${userArgs}commit -m "${description}"`);
 
   return diff;
 }
@@ -59,16 +70,11 @@ export async function atomicWriteAndCommit(
   description: string,
   context: GitContext,
 ): Promise<string> {
-  const branchName = await createDeterministicBranch(context);
+  const { branchName, userName, userEmail } = await createAgentBranch(context);
 
-  // Write the file
   await writeFile(filePath, content, "utf8");
-
-  // Stage and commit
-  await commitFile(filePath, description);
-
+  await commitFile(filePath, description, userName, userEmail);
   return `File written and committed: ${filePath} on branch ${branchName}`;
 }
 
-// Re-export writeFile for convenience
 export { writeFile } from "fs/promises";

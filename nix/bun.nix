@@ -1,5 +1,11 @@
 # Set of Bun packages to install
 {
+  "@faker-js/faker" = {
+    out_path = "@faker-js/faker";
+    name = "@faker-js/faker@10.1.0";
+    url = "https://registry.npmjs.org/@faker-js/faker/-/faker-10.1.0.tgz";
+    hash = "sha512-C3mrr3b5dRVlKPJdfrAXS8+dq+rq8Qm5SNRazca0JKgw1HQERFmrVb0towvMmw5uu8hHKNiQasMaR/tydf3Zsg==";
+  };
   "@opencode-ai/plugin" = {
     out_path = "@opencode-ai/plugin";
     name = "@opencode-ai/plugin@0.15.14";

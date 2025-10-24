@@ -1,5 +1,0 @@
-This is a test file created with atomic_write tool.
-Testing atomic operations in openco.
-This line was added with atomic_edit to test diff display.
-Another line added to test the pretty diff rendering.
-Added a new line to test diff display.

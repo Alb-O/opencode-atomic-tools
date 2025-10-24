@@ -1,2 +1,0 @@
-This is a test file to verify the description functionality.
-Updated with new content.

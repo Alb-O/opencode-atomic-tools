@@ -1,7 +1,7 @@
 import { type Plugin, tool } from "@opencode-ai/plugin";
 import path from "path";
 import { createTwoFilesPatch } from "diff";
-import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
+import { createAgentBranch, commitFile } from "./shared/git-helpers.js";
 import { setNote } from "./shared/edit-notes.js";
 
 type MetaInput = {
@@ -50,7 +50,7 @@ export const AtomicEdit: Plugin = async () => {
       })();
       const desc = args.description || `Update ${rel}`;
 
-      const branch = await createDeterministicBranch({
+      const { branchName, userName, userEmail } = await createAgentBranch({
         sessionID: context.sessionID,
         agent: context.agent,
       });
@@ -77,7 +77,7 @@ export const AtomicEdit: Plugin = async () => {
         return `${curr.slice(0, index)}${value}${curr.slice(index + old.length)}`;
       })();
 
-      await Bun.write(file, body);
+  await Bun.write(file, body);
       const raw = createTwoFilesPatch(file, file, curr, body);
       const diff = (() => {
         const lines = raw.split("\n");
@@ -112,10 +112,10 @@ export const AtomicEdit: Plugin = async () => {
           })
           .join("\n");
       })();
-      await commitFile(file, desc);
+  await commitFile(file, desc, userName, userEmail);
 
-      const title = rel;
-      const output = `File edited and committed: ${rel} on branch ${branch}`;
+  const title = rel;
+  const output = `File edited and committed: ${rel} on branch ${branchName}`;
       const meta = { filePath: rel, diff };
 
       const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;

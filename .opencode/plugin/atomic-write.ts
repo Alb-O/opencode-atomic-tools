@@ -1,6 +1,6 @@
 import { tool } from "@opencode-ai/plugin";
 import path from "path";
-import { createDeterministicBranch, commitFile } from "./shared/git-helpers.js";
+import { createAgentBranch, commitFile } from "./shared/git-helpers.js";
 import { setNote } from "./shared/edit-notes.js";
 
 type MetaInput = {
@@ -36,16 +36,16 @@ export default async function writeAndCommitPlugin() {
       const rel = relSource.startsWith("..") ? path.basename(file) : relSource;
       const desc = args.description || `Create ${rel}`;
 
-      const branch = await createDeterministicBranch({
+      const { branchName, userName, userEmail } = await createAgentBranch({
         sessionID: context.sessionID,
         agent: context.agent,
       });
 
       await Bun.write(file, body);
-      const diff = await commitFile(file, desc);
+      const diff = await commitFile(file, desc, userName, userEmail);
 
       const title = rel;
-      const output = `File written and committed: ${rel} on branch ${branch}`;
+      const output = `File written and committed: ${rel} on branch ${branchName}`;
       const meta = { filePath: rel, diff };
 
       const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;

@@ -4,6 +4,7 @@
     "": {
       "name": "examples",
       "dependencies": {
+        "@faker-js/faker": "^10.1.0",
         "@opencode-ai/plugin": "^0.15.14",
         "diff": "^8.0.2",
       },
@@ -16,6 +17,8 @@
     },
   },
   "packages": {
+    "@faker-js/faker": ["@faker-js/faker@10.1.0", "", {}, "sha512-C3mrr3b5dRVlKPJdfrAXS8+dq+rq8Qm5SNRazca0JKgw1HQERFmrVb0towvMmw5uu8hHKNiQasMaR/tydf3Zsg=="],
+
     "@opencode-ai/plugin": ["@opencode-ai/plugin@0.15.14", "", { "dependencies": { "@opencode-ai/sdk": "0.15.14", "zod": "4.1.8" } }, "sha512-Ybs6UZxVkrRlGdrnL58H7qxBxzIfC6/DI82Pc6XU6gQeeZE+gmXEVYYX5QXWct3Kc3brL54zgdlj6ONU7KLP6g=="],
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@0.15.14", "", {}, "sha512-ITJePjIq5GChtyPa/6+7oIB7UYaXlCiM0LvOWnZdZFq4UOggW6K7hRqKSmf8WMPR2nc1EfHP2RIwgdynK3cG2A=="],

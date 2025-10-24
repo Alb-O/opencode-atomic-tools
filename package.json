@@ -13,6 +13,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@faker-js/faker": "^10.1.0",
     "@opencode-ai/plugin": "^0.15.14",
     "diff": "^8.0.2"
   }
