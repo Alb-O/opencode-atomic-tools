@@ -1,6 +1,6 @@
 {
   mkBunDerivation,
-  bunNix ? ./bun.nix,
+  bunNix,
   src,
   ...
 }:

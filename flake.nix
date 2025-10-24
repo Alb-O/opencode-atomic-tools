@@ -42,6 +42,7 @@
         default = pkgsFor.${system}.callPackage ./nix {
           inherit (bun2nix.lib.${system}) mkBunDerivation;
           src = ./.;
+          bunNix = ./nix/bun.nix;
         };
       });
 
@@ -59,6 +60,7 @@
                 callPackage ./nix {
                   inherit (bun2nix.lib.${system}) mkBunDerivation;
                   src = ./.;
+                  bunNix = ./nix/bun.nix;
                 }
               );
             })

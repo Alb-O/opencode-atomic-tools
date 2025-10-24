@@ -1,7 +1,7 @@
 {
   "name": "examples",
   "scripts": {
-    "postinstall": "bun2nix -o bun.nix"
+    "postinstall": "bun2nix -o nix/bun.nix"
   },
   "module": "index.ts",
   "type": "module",
