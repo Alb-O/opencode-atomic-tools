@@ -1,6 +1,6 @@
 import path from "path";
 import { ensureBranchExists, worktreeAdd } from "./git-helpers.ts";
-import { setSessionWorktree } from "./worktree-session.ts";
+import { setSessionWorktree, getSessionWorktree } from "./worktree-session.ts";
 import { getAgentIdentity } from "./identity-helper.ts";
 
 export interface WorktreeContextInput {
@@ -46,4 +46,31 @@ export async function resolveWorktreeContext(input: WorktreeContextInput): Promi
     userName: identity.userName,
     userEmail: identity.userEmail,
   };
+}
+
+export interface WorktreeWrapperInput {
+  sessionID: string;
+  tool: string;
+  args: Record<string, unknown>;
+  rootDirectory: string;
+}
+
+export function wrapToolCallWithWorktree(input: WorktreeWrapperInput): void {
+  const wt = getSessionWorktree(input.sessionID);
+  if (!wt) {
+    return;
+  }
+  const cwd = path.isAbsolute(wt) ? wt : path.join(input.rootDirectory, wt);
+  input.args.cwd = cwd;
+  const name = input.tool.toLowerCase();
+  if (name === "bash") {
+    const command = input.args.command;
+    if (typeof command === "string" && command.trim().length) {
+      const quoted = JSON.stringify(cwd);
+      const prefix = `cd ${quoted} && `;
+      if (!command.startsWith(prefix)) {
+        input.args.command = `${prefix}(${command})`;
+      }
+    }
+  }
 }

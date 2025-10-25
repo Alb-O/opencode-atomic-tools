@@ -30,8 +30,8 @@ export async function listWorktrees(): Promise<Array<{ worktreePath: string; bra
 
   for (const entry of entries) {
     const lines = entry.split('\n');
-  const wtLine = lines.find((l: string) => l.startsWith('worktree '));
-  const branchLine = lines.find((l: string) => l.startsWith('branch '));
+    const wtLine = lines.find((l: string) => l.startsWith('worktree '));
+    const branchLine = lines.find((l: string) => l.startsWith('branch '));
     if (!wtLine) continue;
     const p = wtLine.replace(/^worktree\s+/, '').trim();
     results.push({ worktreePath: p, branch: branchLine ? branchLine.replace(/^branch\s+/, '').trim() : undefined });
@@ -77,9 +77,9 @@ export async function commitFile(
   // Heuristic regex to detect code-like symbols. Accepts:
   // - PascalCase / single capital letter (Foo, X)
   // - camelCase / single lower letter (fooBar, i)
-  // - ALL_CAPS or digits/underscores (CONSTANT_1)
-  // - kebab-case or snake_case (some-name, some_name)
-  // - identifiers starting with _ or $ (e.g. _private, $elem)
+  // - ALL_CAPS or digits/underscores
+  // - kebab-case or snake_case
+  // - identifiers starting with _ or $
   const symbolPattern = /^([A-Z][A-Za-z0-9]*|[a-z][A-Za-z0-9]*|[A-Z0-9_]+|[a-z0-9]+(?:[-_][a-z0-9]+)+|[_$][A-Za-z0-9_$]*)$/;
 
   // If it doesn't look like a code symbol, make the first letter lowercase
