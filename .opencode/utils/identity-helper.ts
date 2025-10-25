@@ -49,3 +49,23 @@ export async function getAgentIdentity(context: GitContext): Promise<AgentIdenti
 
   return { branchName, userName, userEmail, middleName, hash };
 }
+
+export async function generateNewWtAgentIdentity(): Promise<AgentIdentity> {
+  // Generate unique identity for each wt_agent
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 6);
+  const hash = createHash("sha256")
+    .update(`${timestamp}-${random}`)
+    .digest("hex")
+    .substring(0, 8);
+
+  // Use timestamp as seed for faker to ensure uniqueness
+  faker.seed(Date.now());
+  const middleName = faker.person.middleName().toLowerCase();
+  const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
+  const userEmail = `${middleName}@opencode.ai`;
+
+  const branchName = `wt/${middleName}-${hash}`;
+
+  return { branchName, userName, userEmail, middleName, hash };
+}
