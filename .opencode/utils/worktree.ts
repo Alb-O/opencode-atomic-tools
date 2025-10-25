@@ -32,7 +32,7 @@ function normalizeTarget(root: string, file: string) {
 export async function resolveWorktreeContext(input: WorktreeContextInput): Promise<WorktreeContext> {
   const identity = await getAgentIdentity({ sessionID: input.sessionID, agent: input.agent });
   const name = `${identity.middleName}-${identity.hash}`;
-  const worktreePath = path.join(".agent", "worktrees", name);
+  const worktreePath = path.join(".agent", "wt", name);
   await ensureBranchExists(identity.branchName);
   await worktreeAdd(worktreePath, identity.branchName).catch(() => undefined);
   setSessionWorktree(input.sessionID, worktreePath);

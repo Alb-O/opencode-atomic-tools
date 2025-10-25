@@ -1,2 +1,2 @@
-# Agents will create git worktrees in here
-/worktrees/
+# wt_agents will create git worktrees in here
+/wt/

@@ -13,8 +13,8 @@ type MetaInput = {
   };
 };
 
-export default async function writeAndCommitPlugin() {
-  const lazy_write = tool({
+export default async function writeWrapperPlugin() {
+  const write_wrapper = tool({
     description: "Create a file and commit",
     args: {
       filePath: tool.schema
@@ -75,7 +75,7 @@ export default async function writeAndCommitPlugin() {
 
   return {
     tool: {
-      write: lazy_write,
+      write: write_wrapper,
     },
   };
 }

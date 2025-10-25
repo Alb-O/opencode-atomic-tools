@@ -131,7 +131,7 @@ async function ensureSession(name: string): Promise<RemoteSession> {
   const remote = await ensureServer(name);
   if (!remote.sessionId) {
     // Create a session with a concise log on success/failure.
-    const payload = { title: `Lazy Agent ${name}` };
+    const payload = { title: `wt_agent: ${name}` };
     const result = await remote.client.session.create({ body: payload, responseStyle: "data" }).catch((err) => {
       throw err;
     });

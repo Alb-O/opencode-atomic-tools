@@ -14,8 +14,8 @@ type MetaInput = {
   };
 };
 
-export const LazyEdit: Plugin = async () => {
-  const lazy_edit = tool({
+export const EditWrapper: Plugin = async () => {
+  const edit_wrapper = tool({
     description:
       "Apply exact string replacement edits to a file and commit",
     args: {
@@ -140,9 +140,9 @@ export const LazyEdit: Plugin = async () => {
 
   return {
     tool: {
-      edit: lazy_edit,
+      edit: edit_wrapper,
     },
   };
 };
 
-export default LazyEdit;
+export default EditWrapper;
