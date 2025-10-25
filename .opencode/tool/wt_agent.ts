@@ -1,5 +1,5 @@
 import { tool } from "@opencode-ai/plugin"
-import { getAgentIdentity as getWtAgentIdentity } from "../utils/identity-helper.ts"
+import { getAgentIdentity as getWtAgentIdentity, generateNewWtAgentIdentity } from "../utils/identity-helper.ts"
 import {
   ensureRemoteSession,
   describeRemote,
