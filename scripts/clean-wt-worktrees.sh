@@ -116,10 +116,39 @@ for t in "${targets[@]}"; do
   br=${t##*::}
 
   echo "Removing worktree at: $path"
-  if git worktree remove --force --quiet "$path" 2>/dev/null; then
+
+  # If the worktree directory exists, ensure it is not currently on the
+  # branch we're about to delete. If it is, attempt to check out a safe
+  # branch (prefer 'main' or 'master') or detach HEAD. This allows branch
+  # deletion later without being blocked by a checked-out branch.
+  if [[ -d "$path" ]]; then
+    current_in_worktree=$(git -C "$path" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    if [[ -n "$current_in_worktree" && "$current_in_worktree" == "$br" ]]; then
+      echo "  worktree $path currently on branch $br; switching to safe ref"
+      if git show-ref --verify --quiet refs/heads/main; then
+        git -C "$path" checkout main >/dev/null 2>&1 || true
+        echo "  checked out 'main' in $path"
+      elif git show-ref --verify --quiet refs/heads/master; then
+        git -C "$path" checkout master >/dev/null 2>&1 || true
+        echo "  checked out 'master' in $path"
+      else
+        git -C "$path" checkout --detach >/dev/null 2>&1 || true
+        echo "  detached HEAD in $path"
+      fi
+    fi
+  fi
+
+  # Try to remove the worktree without --force first so git can perform a
+  # clean detach. If that fails, retry with --force as a fallback.
+  if git worktree remove --quiet "$path" 2>/dev/null; then
     echo "  git worktree removed: $path"
   else
-    echo "  git worktree remove failed or already removed: $path (continuing)" >&2
+    echo "  git worktree remove failed (retrying with --force)"
+    if git worktree remove --force --quiet "$path" 2>/dev/null; then
+      echo "  git worktree force-removed: $path"
+    else
+      echo "  git worktree remove failed or already removed: $path (continuing)" >&2
+    fi
   fi
 
   # If directory still exists, try to remove it
@@ -128,17 +157,27 @@ for t in "${targets[@]}"; do
     rm -rf -- "$path"
   fi
 
-  # Delete local branch if it exists
+  # Delete local branch if it exists. If `git branch -D` fails (for
+  # example because the branch is still checked out somewhere), attempt a
+  # lower-level removal with update-ref as a last resort.
   if git show-ref --verify --quiet "refs/heads/$br"; then
     echo "  deleting local branch: $br"
     if git branch -D "$br" >/dev/null 2>&1; then
       echo "  branch deleted: $br"
     else
-      echo "  failed to delete branch: $br" >&2
+      echo "  failed to delete branch: $br (attempting force removal of ref)" >&2
+      if git update-ref -d "refs/heads/$br" >/dev/null 2>&1; then
+        echo "  branch force-removed via update-ref: $br"
+      else
+        echo "  failed to force-remove branch $br" >&2
+      fi
     fi
   else
     echo "  local branch not found (skipping delete): $br"
   fi
+
+  # Prune stale worktrees
+  git worktree prune --quiet
 done
 
 echo "Done."
