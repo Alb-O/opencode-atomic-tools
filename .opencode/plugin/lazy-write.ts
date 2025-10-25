@@ -14,8 +14,8 @@ type MetaInput = {
 };
 
 export default async function writeAndCommitPlugin() {
-  const atomic_write = tool({
-    description: "Write a file and atomic commit",
+  const lazy_write = tool({
+    description: "Create a file and commit",
     args: {
       filePath: tool.schema
         .string()
@@ -27,7 +27,7 @@ export default async function writeAndCommitPlugin() {
         .string()
         .optional()
         .describe(
-          "One-line desc of what edit you're making and why; used for commit message (keep it technical, reference API, functions, signatures, etc.)",
+          "One-line desc of what edit you're making and why; used for commit message. IMPORTANT: be highly technical, reference API, functions, signatures.",
         ),
     },
     async execute(args, context) {
@@ -75,7 +75,7 @@ export default async function writeAndCommitPlugin() {
 
   return {
     tool: {
-      write: atomic_write,
+      write: lazy_write,
     },
   };
 }

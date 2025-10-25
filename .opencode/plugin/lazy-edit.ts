@@ -14,10 +14,10 @@ type MetaInput = {
   };
 };
 
-export const AtomicEdit: Plugin = async () => {
-  const atomic_edit = tool({
+export const LazyEdit: Plugin = async () => {
+  const lazy_edit = tool({
     description:
-      "Apply exact string replacement edits to a file and atomic commit",
+      "Apply exact string replacement edits to a file and commit",
     args: {
       filePath: tool.schema
         .string()
@@ -35,7 +35,7 @@ export const AtomicEdit: Plugin = async () => {
         .string()
         .optional()
         .describe(
-          "One-line desc of what edit you're making and why; used for commit message (keep it technical, reference API, functions, signatures, etc.)",
+          "One-line desc of what edit you're making and why; used for commit message. IMPORTANT: be highly technical, reference API, functions, signatures.",
         ),
     },
     async execute(args, context) {
@@ -140,9 +140,9 @@ export const AtomicEdit: Plugin = async () => {
 
   return {
     tool: {
-      edit: atomic_edit,
+      edit: lazy_edit,
     },
   };
 };
 
-export default AtomicEdit;
+export default LazyEdit;

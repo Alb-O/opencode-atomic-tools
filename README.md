@@ -1,6 +1,6 @@
 ## Overview
 
-- Atomic Tools wraps the built-in `edit` and `write` tool IDs with custom plugins so the runtime routes requests through our handlers.
+- Lazy Tools wraps the built-in `edit` and `write` tool IDs with custom plugins so the runtime routes requests through our handlers.
 - Respect the SDK contract by returning `Promise<string>` from `execute` while still delivering diff metadata for the TUI renderer.
 - Bridge the metadata gap by caching results per tool call and overwriting the host callback payload.
 
@@ -10,7 +10,7 @@
 - The host fires `context.metadata({ title?, metadata? })` opportunistically during execution.
 - `tool.execute.after` receives the final `{ title, output, metadata }` object that becomes `toolPart.state`.
 
-## Atomic Tools Implementation Notes
+## Lazy Tools Implementation Notes
 
 1. Deterministic branches: reuse `createDeterministicBranch` so each tool call switches to a session-scoped branch before writing.
 2. File writes and commits: use `Bun.write` (edit/write) followed by `commitFile` to stage and commit, capturing the staged diff from git.

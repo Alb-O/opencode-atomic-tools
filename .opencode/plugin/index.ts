@@ -1,13 +1,13 @@
 import path from "path";
-import writeAndCommitPlugin from "./atomic-write.ts";
-import editAndCommitPlugin from "./atomic-edit.ts";
+import LazyWritePlugin from "./lazy-write.ts";
+import LazyEditPlugin from "./lazy-edit.ts";
 import { takeNote } from "../utils/edit-notes.ts";
 import { getSessionWorktree } from "../utils/worktree-session.ts";
 import type { PluginInput } from "@opencode-ai/plugin";
 
-export default async function atomicToolsPlugin(input: PluginInput) {
-  const writePlugin = await writeAndCommitPlugin();
-  const editPlugin = await editAndCommitPlugin(input);
+export default async function lazyToolsPlugin(input: PluginInput) {
+  const writePlugin = await LazyWritePlugin();
+  const editPlugin = await LazyEditPlugin(input);
 
   return {
     tool: {

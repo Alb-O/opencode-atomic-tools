@@ -71,7 +71,25 @@ export async function commitFile(
     ? `-c user.name="${userName}" -c user.email="${userEmail}" `
     : "";
 
-  await execAsync(`git ${userArgs}commit -m "${description}"`, cwd ? { cwd } : {} as any);
+  // Opinionated commit message style: lowercase english (but not code symbols/API)
+  const firstWord = description.split(" ")[0];
+
+  // Heuristic regex to detect code-like symbols. Accepts:
+  // - PascalCase / single capital letter (Foo, X)
+  // - camelCase / single lower letter (fooBar, i)
+  // - ALL_CAPS or digits/underscores (CONSTANT_1)
+  // - kebab-case or snake_case (some-name, some_name)
+  // - identifiers starting with _ or $ (e.g. _private, $elem)
+  const symbolPattern = /^([A-Z][A-Za-z0-9]*|[a-z][A-Za-z0-9]*|[A-Z0-9_]+|[a-z0-9]+(?:[-_][a-z0-9]+)+|[_$][A-Za-z0-9_$]*)$/;
+
+  // If it doesn't look like a code symbol, make the first letter lowercase
+  const finalDescription = symbolPattern.test(firstWord)
+    ? description
+    : description.charAt(0).toLowerCase() + description.slice(1);
+
+  // Serialize the message so internal quotes are escaped for the shell.
+  const msg = JSON.stringify(finalDescription);
+  await execAsync(`git ${userArgs}commit -m ${msg}`, cwd ? { cwd } : {} as any);
 
   return diff;
 }

@@ -3,7 +3,8 @@ import { faker } from "@faker-js/faker";
 
 export interface GitContext {
   sessionID: string;
-  agent: string;
+  // agent may be undefined for legacy callers
+  agent?: string;
 }
 
 export interface AgentIdentity {
@@ -15,26 +16,24 @@ export interface AgentIdentity {
 }
 
 export async function getAgentIdentity(context: GitContext): Promise<AgentIdentity> {
-  // Check if already in an agent tmux session
-  const { getCurrentTmuxSession } = await import("./session-helpers");
-  const currentSession = await getCurrentTmuxSession();
-  
-  if (currentSession) {
-    // Check if current session matches agent pattern: [middleName]-[8-char-hash]
-    const agentSessionPattern = /^([a-z]+)-([a-f0-9]{8})$/;
-    const match = currentSession.name.match(agentSessionPattern);
-    
-    if (match) {
-      const [, middleName, hash] = match;
-      const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
-      const userEmail = `${middleName}@opencode.ai`;
-      const branchName = `opencode/${middleName}-${hash}`;
-      
-      return { branchName, userName, userEmail, middleName, hash };
+  if (context.agent) {
+    const { describeRemote } = await import("./opencode-remote");
+    const remote = describeRemote(context.agent);
+    if (remote && typeof remote.name === "string") {
+      // Expect agent name format: <middleName>-<8-char-hash>
+      const agentSessionPattern = /^([a-z]+)-([a-f0-9]{8})$/;
+      const match = remote.name.match(agentSessionPattern);
+      if (match) {
+        const [, middleName, hash] = match;
+        const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
+        const userEmail = `${middleName}@opencode.ai`;
+        const branchName = `opencode/${middleName}-${hash}`;
+        return { branchName, userName, userEmail, middleName, hash };
+      }
     }
   }
 
-  // Create new identity if not in agent session
+  // Fallback: generate deterministic identity from sessionID
   const hash = createHash("sha256")
     .update(`${context.sessionID}`)
     .digest("hex")
