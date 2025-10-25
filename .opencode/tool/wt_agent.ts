@@ -56,8 +56,28 @@ export const new_session = tool({
     // Ensure an opencode remote session exists for this agent (starts server + session)
     await ensureRemoteSession(sessionName)
 
-    const reply = await runShell(sessionName, initial_prompt)
-    if (reply && reply !== "No messages") return reply
+    // Start the agent shell prompt but don't block for its full completion.
+    // Wait a short time for a quick reply — if we get one, return it to
+    // the caller, otherwise detach the work silently.
+    const runP = runShell(sessionName, initial_prompt)
+    const TIMEOUT_MS = 200
+    const TIMEOUT_SENTINEL = Symbol("timeout")
+
+    try {
+      const raced = await Promise.race([
+        runP,
+        new Promise((res) => setTimeout(() => res(TIMEOUT_SENTINEL), TIMEOUT_MS)),
+      ])
+
+      if (raced !== TIMEOUT_SENTINEL) {
+        const reply = raced as unknown as string
+        if (reply && reply !== "No messages") return reply
+        // If it returned but had no text, fall-through and return created
+      }
+    } finally {
+      void runP.catch(() => {})
+    }
+
     return `Session ${sessionName} created`
   },
 })
