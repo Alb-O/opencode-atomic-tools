@@ -71,21 +71,35 @@ export async function commitFile(
     ? `-c user.name="${userName}" -c user.email="${userEmail}" `
     : "";
 
-  // Opinionated commit message style: lowercase english (but not code symbols/API)
+  // Opinionated commit message style: lowercase english (not code symbols/API)
   const firstWord = description.split(" ")[0];
+  const styleCharIdx = "([<{\"\'".includes(firstWord[0]) ? 1 : 0;
+  const styleChar = firstWord[styleCharIdx] || "";
 
-  // Heuristic regex to detect code-like symbols. Accepts:
-  // - PascalCase / single capital letter (Foo, X)
-  // - camelCase / single lower letter (fooBar, i)
+  // Heuristic to detect code-like symbols. We treat as symbols:
+  // - starts with _ or $
   // - ALL_CAPS or digits/underscores
-  // - kebab-case or snake_case
-  // - identifiers starting with _ or $
-  const symbolPattern = /^([A-Z][A-Za-z0-9]*|[a-z][A-Za-z0-9]*|[A-Z0-9_]+|[a-z0-9]+(?:[-_][a-z0-9]+)+|[_$][A-Za-z0-9_$]*)$/;
+  // - kebab-case or snake_case (lowercase-with-separators)
+  // - camelCase (has an internal uppercase)
+  // - PascalCase with multiple segments (e.g., FooBar)
+  const symbolPattern = /^([_$][A-Za-z0-9_$]*|[A-Z0-9_]+|[a-z0-9]+(?:[-_][a-z0-9]+)+|[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*|[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]+)+)$/;
 
-  // If it doesn't look like a code symbol, make the first letter lowercase
-  const finalDescription = symbolPattern.test(firstWord)
-    ? description
-    : description.charAt(0).toLowerCase() + description.slice(1);
+  // Detect plain English capitalized words like "Implement" (single initial cap,
+  // followed by all lowercase).
+  const isPlainCapitalized = /^[A-Z][a-z]+$/.test(styleChar + firstWord.slice(styleCharIdx + 1));
+
+  // If it's a code-like symbol leave it as-is, otherwise lowercase the styleChar.
+  let finalDescription;
+  if (symbolPattern.test(firstWord) && !isPlainCapitalized) {
+    finalDescription = description;
+  } else {
+    // Lowercase the styleChar (first or second char), keep the rest as-is
+    if (styleCharIdx === 0) {
+      finalDescription = styleChar.toLowerCase() + description.slice(1);
+    } else {
+      finalDescription = description.slice(0, styleCharIdx) + styleChar.toLowerCase() + description.slice(styleCharIdx + 1);
+    }
+  }
 
   // Serialize the message so internal quotes are escaped for the shell.
   const msg = JSON.stringify(finalDescription);
