@@ -30,10 +30,7 @@
       ...
     }:
     let
-      # Read each system from the nix-systems input
       eachSystem = nixpkgs.lib.genAttrs (import systems);
-
-      # Access the package set for a given system
       pkgsFor = eachSystem (system: import nixpkgs { inherit system; });
     in
     {
@@ -51,12 +48,12 @@
           packages = with pkgsFor.${system}; [
             bun
 
-            # Add the bun2nix binary to our devshell
+            # Add the bun2nix binary to the devshell
             bun2nix.packages.${system}.default
 
             # Add the opencode wrapper
             (callPackage ./nix/opencode-wrapper.nix {
-              opencode = (
+              oc = (
                 callPackage ./nix {
                   inherit (bun2nix.lib.${system}) mkBunDerivation;
                   src = ./.;

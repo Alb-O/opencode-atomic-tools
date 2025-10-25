@@ -1,6 +1,6 @@
-{ writeShellScriptBin, opencode }:
+{ writeShellScriptBin, oc }:
 
-writeShellScriptBin "opencode" ''
+writeShellScriptBin "oc" ''
   find_user_opencode() {
     for profile in $NIX_PROFILES; do
       if [ -x "$profile/bin/opencode" ]; then
@@ -10,7 +10,7 @@ writeShellScriptBin "opencode" ''
     done
     return 1
   }
-  
+
   user_opencode=$(find_user_opencode)
   if [ $? -eq 0 ]; then
     if [ -f ".opencode/config.json" ]; then
