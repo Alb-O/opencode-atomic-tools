@@ -9,32 +9,32 @@ import {
 } from "../utils/opencode-remote.ts"
 import { markWtAgentSession, optInToWorktree, isWtAgentSession, optOutOfWorktree } from "../utils/worktree-session.ts"
 
-async function wtAgentSession(context: { sessionID: string; agent: string }) {
-  const identity = await getWtAgentIdentity(context)
-  return `${identity.middleName}-${identity.hash}`
-}
-
 export const list_sessions = tool({
   description: "List wt_agent sessions.",
   args: {},
   async execute(_args, context) {
-    // Exclude the current session and return all other known remotes.
-    const sessionName = await wtAgentSession(context)
     // Keep identity check to ensure context is valid
     await getWtAgentIdentity(context)
 
     const rems = listRemotes()
-    const others = rems.filter((r) => r.name !== sessionName)
-    if (!others || others.length === 0) return "No sessions"
+    // Filter for wt_agent sessions (those marked in worktree-session.ts)
+    const wtAgentRemotes = rems.filter((r) => {
+      // Check if this remote name matches wt_agent session pattern
+      const wtAgentPattern = /^[a-z]+-[a-f0-9]{8}$/
+      return wtAgentPattern.test(r.name)
+    })
+    
+    if (!wtAgentRemotes || wtAgentRemotes.length === 0) return "No sessions"
 
-    return others
-      .map((info) =>
-        info.active
-          ? `Session ${info.name} active at ${info.url}`
-          : `Session ${info.name} exists but not active`
-      )
-      .join("\n\n")
-      + "Use the 'wt_agent_send_prompt' tool to instruct the agent, or wt_agent_worktree_jump_in to check its worktree."
+    return (
+      wtAgentRemotes
+        .map((info) =>
+          info.active
+            ? `Session ${info.name} active at ${info.url}`
+            : `Session ${info.name} exists but not active`
+        )
+        + "\n\nUse the 'wt_agent_send_prompt' tool to instruct the agent, or wt_agent_worktree_jump_in to check its worktree."
+    )
   },
 })
 
@@ -50,7 +50,8 @@ export const new_session = tool({
         "Initial prompt is required. Please include a detailed message describing the agent's goals and relevant context."
       )
     }
-    const sessionName = await wtAgentSession(context)
+    const baseIdentity = await getWtAgentIdentity(context)
+    const sessionName = `${baseIdentity.middleName}-${baseIdentity.hash}`
     // Mark this session as a wt_agent session to enable worktree wrapping
     markWtAgentSession(sessionName)
     // Ensure an opencode remote session exists for this agent (starts server + session)
@@ -83,13 +84,21 @@ export const new_session = tool({
 })
 
 export const kill_session = tool({
-  description: "Kill this wt_agent's session",
-  args: {},
-  async execute(_args, context) {
-    const sessionName = await wtAgentSession(context)
-    const ok = await shutdownRemote(sessionName)
-    if (!ok) return `Session ${sessionName} not found`
-    return `Session ${sessionName} killed`
+  description: "Kill a wt_agent session",
+  args: {
+    session_id: tool.schema.string().describe("The session ID of the wt_agent to kill"),
+  },
+  async execute(args, context) {
+    const { session_id } = args
+    if (!session_id || String(session_id).trim().length === 0) {
+      throw new Error(
+        "Session ID is required. Please provide the session ID of the wt_agent to kill."
+      )
+    }
+
+    const ok = await shutdownRemote(session_id)
+    if (!ok) return `Session ${session_id} not found`
+    return `Session ${session_id} killed`
   },
 })
 
@@ -97,16 +106,34 @@ export const send_prompt = tool({
   description: "Send a prompt message to an existing session agent",
   args: {
     prompt: tool.schema.string().describe("Prompt text to send to the existing agent session"),
+    session_id: tool.schema.string().optional().describe("Specific session ID to send prompt to (optional - will use most recent if not provided)"),
   },
   async execute(args, context) {
-    const { prompt } = args
+    const { prompt, session_id } = args
     if (!prompt || String(prompt).trim().length === 0) {
       throw new Error(
         "Prompt is required. Please include a detailed message describing what you want the agent to do."
       )
     }
 
-    const sessionName = await wtAgentSession(context)
+    let sessionName: string | undefined
+    
+    if (session_id) {
+      sessionName = session_id
+    } else {
+      // Find the most recent wt_agent session
+      const rems = listRemotes()
+      const wtAgentRemotes = rems.filter((r) => {
+        const wtAgentPattern = /^[a-z]+-[a-f0-9]{8}-[a-f0-9]{4}$/
+        return wtAgentPattern.test(r.name) && r.active
+      })
+      
+      if (!wtAgentRemotes || wtAgentRemotes.length === 0) return "No active wt_agent sessions found"
+      
+      // Use the first (most recent) active session
+      sessionName = wtAgentRemotes[0].name
+    }
+    
     const info = describeRemote(sessionName)
     if (!info || !info.active) return `Session ${sessionName} not running`
 
@@ -139,11 +166,13 @@ export const worktree_jump_in = tool({
       return `Jumped back to the main, non-worktree session`;
     }
 
-    // Check if this is a wt_agent session - if so, deny jumping in
-    if (isWtAgentSession(session_id)) {
-      throw new Error("Worktree jumping is not available for wt_agent sessions.")
+    // Check if current session is a wt_agent - wt_agents cannot jump into other worktrees
+    const current = (context as any).sessionID as string | undefined;
+    if (current && isWtAgentSession(current)) {
+      throw new Error("wt_agent sessions cannot jump into other worktrees.")
     }
 
+    // Allow main agents to jump into wt_agent worktrees to check their work
     optInToWorktree(session_id)
     return `Jumped into wt_agent's worktree: ${session_id}`
   },
