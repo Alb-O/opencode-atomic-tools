@@ -110,6 +110,7 @@ async function ensureServer(name: string): Promise<Remote> {
   const _proc = Bun.spawn(["opencode", "serve", `--port=${port}`], {
     stdout: "ignore",
     stderr: "pipe",
+    env: process.env,
   });
   // Narrow to the minimal BunProc shape we use.
   const proc: BunProc = _proc as unknown as BunProc;
