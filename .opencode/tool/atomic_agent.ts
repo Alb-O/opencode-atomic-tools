@@ -3,13 +3,13 @@ import { getAgentIdentity } from "../utils/identity-helper.ts"
 
 // Helper to run tmux commands and return { stdout, stderr, exitCode }
 async function runTmux(cmd: string[]) {
-  const process = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" })
-  const [stdout, stderr] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
+  const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" })
+  const [out, err] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
   ])
-  await process.exited
-  return { stdout, stderr, exitCode: process.exitCode }
+  await proc.exited
+  return { stdout: out, stderr: err, exitCode: proc.exitCode }
 }
 
 export const list_sessions = tool({
@@ -21,7 +21,10 @@ export const list_sessions = tool({
     void identity
 
     const { stdout, stderr, exitCode } = await runTmux(["tmux", "ls"]) 
-    if (exitCode !== 0) return `Error: ${stderr.trim()}`
+    if (exitCode !== 0) {
+      if (stderr.includes("no server running")) return "No sessions"
+      return `Error: ${stderr.trim()}`
+    }
     return stdout.trim() || "No sessions"
   },
 })
@@ -37,13 +40,19 @@ export const new_session = tool({
     const identity = await getAgentIdentity(context)
     const sessionName = `${identity.middleName}-${identity.hash}`
 
-    const tmux_cmd = ["tmux", "new-session", "-s", sessionName]
-    if (!attach) tmux_cmd.push("-d")
-    if (command_to_run) tmux_cmd.push(command_to_run)
+    const create = await runTmux(["tmux", "new-session", "-d", "-s", sessionName])
+    if (create.exitCode !== 0) return `Error: ${create.stderr.trim()}`
 
-    const { stdout, stderr, exitCode } = await runTmux(tmux_cmd)
-    if (exitCode !== 0) return `Error: ${stderr.trim()}`
-    return stdout.trim() || `Session ${sessionName} created`
+    const option = await runTmux(["tmux", "set-option", "-t", sessionName, "remain-on-exit", "on"])
+    if (option.exitCode !== 0) return `Error: ${option.stderr.trim()}`
+
+    if (command_to_run) {
+      const send = await runTmux(["tmux", "send-keys", "-t", sessionName, command_to_run, "Enter"])
+      if (send.exitCode !== 0) return `Error: ${send.stderr.trim()}`
+    }
+
+    if (attach) return `Session ${sessionName} created. Run "tmux attach -t ${sessionName}" to attach.`
+    return `Session ${sessionName} created`
   },
 })
 
@@ -55,7 +64,11 @@ export const kill_session = tool({
     const sessionName = `${identity.middleName}-${identity.hash}`
 
     const { stdout, stderr, exitCode } = await runTmux(["tmux", "kill-session", "-t", sessionName])
-    if (exitCode !== 0) return `Error: ${stderr.trim()}`
+    if (exitCode !== 0) {
+      if (stderr.includes("failed to connect to server")) return `Session ${sessionName} not found`
+      if (stderr.includes("no server running")) return `Session ${sessionName} not found`
+      return `Error: ${stderr.trim()}`
+    }
     return stdout.trim() || `Session ${sessionName} killed`
   },
 })
@@ -69,6 +82,12 @@ export const capture_pane = tool({
     const limit = (typeof args.limit === 'number' && args.limit > 0) ? Math.floor(args.limit) : 200
     const identity = await getAgentIdentity(context)
     const sessionName = `${identity.middleName}-${identity.hash}`
+
+    const check = await runTmux(["tmux", "has-session", "-t", sessionName])
+    if (check.exitCode !== 0) {
+      if (check.stderr.includes("no server running")) return `Session ${sessionName} not running`
+      return `Error: ${check.stderr.trim()}`
+    }
 
     // Use -p to print to stdout, -J to join wrapped lines, -S -<limit> to start <limit> lines from bottom
     const { stdout, stderr, exitCode } = await runTmux(["tmux", "capture-pane", "-t", sessionName, "-p", "-J", "-S", `-${limit}`])
@@ -93,6 +112,12 @@ export const send_keys = tool({
     if (!keys) return "Error: keys are required"
     const identity = await getAgentIdentity(context)
     const sessionName = `${identity.middleName}-${identity.hash}`
+
+    const check = await runTmux(["tmux", "has-session", "-t", sessionName])
+    if (check.exitCode !== 0) {
+      if (check.stderr.includes("no server running")) return `Session ${sessionName} not running`
+      return `Error: ${check.stderr.trim()}`
+    }
 
     const tmux_cmd = ["tmux", "send-keys", "-t", sessionName, keys]
     if (send_enter !== false) tmux_cmd.push("Enter")
