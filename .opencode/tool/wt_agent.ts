@@ -1,5 +1,5 @@
 import { tool } from "@opencode-ai/plugin"
-import { getAgentIdentity as getWtAgentIdentity } from "../utils/identity-helper.ts"
+import { getAgentIdentity as getWtAgentIdentity, generateNewWtAgentIdentity } from "../utils/identity-helper.ts"
 import {
   ensureRemoteSession,
   describeRemote,
@@ -50,7 +50,7 @@ export const new_session = tool({
         "Initial prompt is required. Please include a detailed message describing the agent's goals and relevant context."
       )
     }
-    const baseIdentity = await getWtAgentIdentity(context)
+    const baseIdentity = await generateNewWtAgentIdentity()
     const sessionName = `${baseIdentity.middleName}-${baseIdentity.hash}`
     // Mark this session as a wt_agent session to enable worktree wrapping
     markWtAgentSession(sessionName)
