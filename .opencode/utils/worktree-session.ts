@@ -1,15 +1,24 @@
-const map = new Map<string, string>();
+const worktreeMap = new Map<string, string>();
+const lazyAgentSessions = new Set<string>();
 
 export function setSessionWorktree(sessionID: string, worktreePath: string) {
-  map.set(sessionID, worktreePath);
+  worktreeMap.set(sessionID, worktreePath);
 }
 
 export function getSessionWorktree(sessionID: string): string | undefined {
-  return map.get(sessionID);
+  return worktreeMap.get(sessionID);
 }
 
 export function clearSessionWorktree(sessionID: string) {
-  map.delete(sessionID);
+  worktreeMap.delete(sessionID);
 }
 
-export default { setSessionWorktree, getSessionWorktree, clearSessionWorktree };
+export function markLazyAgentSession(sessionID: string) {
+  lazyAgentSessions.add(sessionID);
+}
+
+export function isLazyAgentSession(sessionID: string): boolean {
+  return lazyAgentSessions.has(sessionID);
+}
+
+export default { setSessionWorktree, getSessionWorktree, clearSessionWorktree, markLazyAgentSession, isLazyAgentSession };

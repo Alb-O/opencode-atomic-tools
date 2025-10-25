@@ -7,6 +7,7 @@ import {
   runShell,
   captureOutput,
 } from "../utils/opencode-remote.ts"
+import { markLazyAgentSession } from "../utils/worktree-session.ts"
 
 async function agentSession(context: { sessionID: string; agent: string }) {
   const identity = await getAgentIdentity(context)
@@ -42,6 +43,8 @@ export const new_session = tool({
       )
     }
     const sessionName = await agentSession(context)
+    // Mark this session as a lazy agent session to enable worktree wrapping
+    markLazyAgentSession(sessionName)
     // Ensure an opencode remote session exists for this agent (starts server + session)
   await ensureRemoteSession(sessionName)
 

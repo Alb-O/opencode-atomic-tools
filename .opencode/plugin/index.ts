@@ -2,6 +2,7 @@ import LazyWritePlugin from "./lazy-write.ts";
 import LazyEditPlugin from "./lazy-edit.ts";
 import { takeNote } from "../utils/edit-notes.ts";
 import { wrapToolCallWithWorktree } from "../utils/worktree.ts";
+import { isLazyAgentSession } from "../utils/worktree-session.ts";
 import type { PluginInput } from "@opencode-ai/plugin";
 
 export default async function lazyToolsPlugin(input: PluginInput) {
@@ -20,12 +21,15 @@ export default async function lazyToolsPlugin(input: PluginInput) {
       if (!state || !state.args || typeof state.args !== "object") {
         return;
       }
-      wrapToolCallWithWorktree({
-        sessionID: details.sessionID,
-        tool: details.tool,
-        args: state.args,
-        rootDirectory: input.directory,
-      });
+      // Only enable worktree wrapping for sessions created by lazy_agent new_session
+      if (isLazyAgentSession(details.sessionID)) {
+        wrapToolCallWithWorktree({
+          sessionID: details.sessionID,
+          tool: details.tool,
+          args: state.args,
+          rootDirectory: input.directory,
+        });
+      }
     },
     "tool.execute.after": async (
       details: { tool: string; sessionID: string; callID: string },
