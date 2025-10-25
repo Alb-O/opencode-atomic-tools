@@ -33,9 +33,8 @@ export const EditWrapper: Plugin = async () => {
         .describe("Replace all occurrences of oldString (default: false)"),
       description: tool.schema
         .string()
-        .optional()
         .describe(
-          "One-line desc of what edit you're making and why; used for commit message. IMPORTANT: be highly technical, reference API, functions, signatures.",
+          "One-line desc of what edit you're making and why; used for commit message. REQUIRED: be highly technical, reference API, functions, signatures.",
         ),
     },
     async execute(args, context) {
@@ -53,7 +52,15 @@ export const EditWrapper: Plugin = async () => {
       const branchName = info.branchName;
       const userName = info.userName;
       const userEmail = info.userEmail;
-      const desc = args.description || `Update ${rel}`;
+      // description is required and must be a non-empty technical one-line summary
+      const desc = (() => {
+        if (!args.description || String(args.description).trim() === "") {
+          throw new Error(
+            "The 'description' argument is required and must be a non-empty, technical one-line summary for the commit. Please provide a technical description that references APIs, functions, or signatures.",
+          );
+        }
+        return args.description;
+      })();
 
       const fullPath = path.join(worktreePath, rel);
       await mkdir(path.dirname(fullPath), { recursive: true });
