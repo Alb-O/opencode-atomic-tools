@@ -299,45 +299,9 @@ export async function runShell(name: string, command: string, agent = "build") {
       }
     }
 
-    // If we still have no text, return a clear sentinel similar to captureOutput.
+    // If we still have no text, return a clear sentinel.
     return "No messages";
   } catch (err) {
     throw err;
   }
-}
-
-function isTextPart(part: Part): part is Extract<Part, { type: "text"; text: string } | { type: "text"; value: string }> {
-  // Accept parts that have either `text` or `value` string properties.
-  if (part.type !== "text") return false;
-  const asAny = part as unknown as { text?: unknown; value?: unknown };
-  if (typeof asAny.text === "string" && asAny.text.length > 0) return true;
-  if (typeof asAny.value === "string" && asAny.value.length > 0) return true;
-  return false;
-}
-
-export async function captureOutput(name: string, limit: number) {
-  const remote = await ensureSession(name);
-  const resp = await remote.client.session.messages({
-    path: { id: remote.sessionId },
-    responseStyle: "data",
-  });
-  const rows: SessionMessagesResponse = "data" in resp && resp.data ? resp.data : [];
-  const text = rows
-    .flatMap((entry) => entry.parts ?? [])
-    .filter(isTextPart)
-    .map((part) => {
-      if (typeof part.text === "string" && part.text.length > 0) return part.text;
-      const alt = (part as unknown as { value?: string }).value;
-      if (typeof alt === "string" && alt.length > 0) return alt;
-      return "";
-    })
-    .filter((value) => value.length > 0)
-    .join("\n");
-  if (!text) {
-    return "No messages";
-  }
-  const lines = text.split(/\r?\n/);
-  const slice = limit > 0 ? lines.slice(-limit) : lines;
-  const result = slice.join("\n").trim();
-  return result || "No messages";
 }

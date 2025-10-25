@@ -27,7 +27,7 @@ export async function getAgentIdentity(context: GitContext): Promise<AgentIdenti
         const [, middleName, hash] = match;
         const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
         const userEmail = `${middleName}@opencode.ai`;
-        const branchName = `opencode/${middleName}-${hash}`;
+        const branchName = `wt/${middleName}-${hash}`;
         return { branchName, userName, userEmail, middleName, hash };
       }
     }
@@ -45,7 +45,7 @@ export async function getAgentIdentity(context: GitContext): Promise<AgentIdenti
   const userName = middleName.charAt(0).toUpperCase() + middleName.slice(1);
   const userEmail = `${middleName}@opencode.ai`;
 
-  const branchName = `opencode/${middleName}-${hash}`;
+  const branchName = `wt/${middleName}-${hash}`;
 
   return { branchName, userName, userEmail, middleName, hash };
 }

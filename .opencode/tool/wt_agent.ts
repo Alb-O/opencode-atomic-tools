@@ -5,7 +5,6 @@ import {
   describeRemote,
   shutdownRemote,
   runShell,
-  captureOutput,
 } from "../utils/opencode-remote.ts"
 import { markWtAgentSession, optInToWorktree, isWtAgentSession, optOutOfWorktree } from "../utils/worktree-session.ts"
 
@@ -31,7 +30,7 @@ export const list_sessions = tool({
 })
 
 export const new_session = tool({
-  description: "Create a new unique worktree agent (wt_agent) and give it a task",
+  description: "Create a new unique worktree agent (wt_agent) and give it a task. The agent will operate in a separate git worktree nested in `.agent/wt/<session_name>`.",
   args: {
     initial_prompt: tool.schema.string().describe("Initial prompt to give the wt_agent. Must be a detailed & highly technical, describe the agent's goals and relevant context."),
   },
@@ -62,26 +61,6 @@ export const kill_session = tool({
     const ok = await shutdownRemote(sessionName)
     if (!ok) return `Session ${sessionName} not found`
     return `Session ${sessionName} killed`
-  },
-})
-
-export const capture_pane = tool({
-  description: "Capture recent lines from the wt_agent's session output",
-  args: {
-    limit: tool.schema.number().optional().describe("No. of lines to capture (default 200)"),
-  },
-  async execute(args, context) {
-    const limit = (typeof args.limit === 'number' && args.limit > 0) ? Math.floor(args.limit) : 200
-    const sessionName = await wtAgentSession(context)
-    // Use the remote capture API to retrieve recent session messages.
-    const resp = await captureOutput(sessionName, limit)
-    if (!resp || resp === "No messages") return `Session ${sessionName} has no output`
-
-    const lines = resp.split(/\r?\n/).map(l => l.trim())
-    // Keep lines that have at least one printable ASCII character
-    const filtered = lines.filter(l => l.length > 0 && /[ -~]/.test(l)).slice(-limit)
-    const out = filtered.join("\n").trim()
-    return out || "No useful output captured"
   },
 })
 
