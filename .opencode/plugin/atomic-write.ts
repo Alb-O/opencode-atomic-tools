@@ -35,16 +35,27 @@ export default async function writeAndCommitPlugin() {
       const file = args.filePath;
       const body = args.content;
 
-      const relSource = path.relative(process.cwd(), file) || file;
-      const rel = relSource.startsWith("..") ? path.basename(file) : relSource;
-      const desc = args.description || `Create ${rel}`;
-
       const identity = await getAgentIdentity({ sessionID: context.sessionID, agent: context.agent });
       const { branchName, userName, userEmail, middleName, hash } = identity as any;
 
       // Worktree path per session
       const worktreeName = `${middleName}-${hash}`;
       const worktreePath = path.join(".agent", "worktrees", worktreeName);
+
+      const absolute = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
+      const root = path.isAbsolute(worktreePath) ? worktreePath : path.resolve(process.cwd(), worktreePath);
+      const rel = (() => {
+        const relWork = path.relative(root, absolute);
+        if (!relWork.startsWith("..")) {
+          return relWork;
+        }
+        const relRoot = path.relative(process.cwd(), absolute) || absolute;
+        if (relRoot.startsWith("..")) {
+          return path.basename(absolute);
+        }
+        return relRoot;
+      })();
+      const desc = args.description || `Create ${rel}`;
 
       // Ensure branch exists and add worktree (no-op if already present)
       await ensureBranchExists(branchName);

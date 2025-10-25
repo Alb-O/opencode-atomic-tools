@@ -44,21 +44,27 @@ export const AtomicEdit: Plugin = async () => {
       const old = args.oldString;
       const value = args.newString;
       const all = args.replaceAll ?? false;
-      const relSource = path.relative(process.cwd(), file) || file;
-      const rel = (() => {
-        if (relSource.startsWith("..")) {
-          return path.basename(file);
-        }
-        return relSource;
-      })();
-      const desc = args.description || `Update ${rel}`;
-
       const identity = await getAgentIdentity({ sessionID: context.sessionID, agent: context.agent });
       const { branchName, userName, userEmail, middleName, hash } = identity as any;
 
       // Worktree path per session
       const worktreeName = `${middleName}-${hash}`;
       const worktreePath = path.join(".agent", "worktrees", worktreeName);
+
+      const absolute = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
+      const root = path.isAbsolute(worktreePath) ? worktreePath : path.resolve(process.cwd(), worktreePath);
+      const rel = (() => {
+        const relWork = path.relative(root, absolute);
+        if (!relWork.startsWith("..")) {
+          return relWork;
+        }
+        const relRoot = path.relative(process.cwd(), absolute) || absolute;
+        if (relRoot.startsWith("..")) {
+          return path.basename(absolute);
+        }
+        return relRoot;
+      })();
+      const desc = args.description || `Update ${rel}`;
 
       // Ensure branch exists and add worktree
       await ensureBranchExists(branchName);
