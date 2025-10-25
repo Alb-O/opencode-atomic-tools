@@ -7,7 +7,7 @@ import {
   runShell,
   captureOutput,
 } from "../utils/opencode-remote.ts"
-import { markLazyAgentSession } from "../utils/worktree-session.ts"
+import { markLazyAgentSession, optInToWorktree, isLazyAgentSession, optOutOfWorktree } from "../utils/worktree-session.ts"
 
 async function agentSession(context: { sessionID: string; agent: string }) {
   const identity = await getAgentIdentity(context)
@@ -105,6 +105,44 @@ export const send_prompt = tool({
   const reply = await runShell(sessionName, prompt)
     if (reply && reply !== "No messages") return reply
     return `Session ${sessionName} responded without text`
+  },
+})
+
+export const worktree_opt_in = tool({
+  description: "Opt into worktree functionality for this session. This allows file operations to be isolated in a git worktree. Only available for non-lazy-agent sessions.",
+  args: {
+    session_id: tool.schema.string().describe("The session ID to opt into worktree functionality"),
+  },
+  async execute(args, context) {
+    // Allow calling with no session_id or an empty string to opt OUT (switch back to non-worktree session)
+  const raw = (args as any)?.session_id as unknown;
+  const session_id = typeof raw === "string" ? raw.trim() : raw ? String(raw).trim() : "";
+
+    // Opt-out path: no session id provided => switch the current session back to the non-worktree context
+    if (!session_id) {
+      const current = (context as any).sessionID as string | undefined;
+      if (!current) {
+        throw new Error("No session context available to opt out")
+      }
+      if (isLazyAgentSession(current)) {
+        throw new Error("Cannot switch a lazy agent back to a non-worktree session; lazy agents always use worktrees.")
+      }
+      optOutOfWorktree(current);
+      return `Session ${current} switched back to non-worktree session`;
+    }
+
+    // Opt-in path (explicit session id provided)
+    if (!session_id || typeof session_id !== "string") {
+      throw new Error("Valid session_id is required")
+    }
+
+    // Check if this is a lazy agent session - if so, deny opt-in
+    if (isLazyAgentSession(session_id)) {
+      throw new Error("Worktree opt-in is not available for lazy agent sessions. Worktree functionality is automatically enabled for lazy agents.")
+    }
+
+    optInToWorktree(session_id)
+    return `Session ${session_id} has opted into worktree functionality`
   },
 })
 
