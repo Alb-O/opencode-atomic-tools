@@ -1,6 +1,6 @@
 import WriteWrapperPlugin from "./write.ts";
 import EditWrapperPlugin from "./edit.ts";
-import { worktree_opt_in } from "../tool/wt_agent.ts";
+import { worktree_jump_in } from "../tool/wt_agent.ts";
 import { takeNote } from "../utils/edit-notes.ts";
 import { wrapToolCallWithWorktree } from "../utils/worktree.ts";
 import { isWtAgentSession, hasOptedInToWorktree } from "../utils/worktree-session.ts";
@@ -14,7 +14,7 @@ export default async function wtAgentPlugin(input: PluginInput) {
     tool: {
       ...writePlugin.tool,
       ...editPlugin.tool,
-      worktree_opt_in: worktree_opt_in,
+      worktree_opt_in: worktree_jump_in,
     },
     "tool.execute.before": async (
       details: { tool: string; sessionID: string; callID: string },

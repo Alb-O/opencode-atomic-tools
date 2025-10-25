@@ -3,6 +3,7 @@ import { getAgentIdentity as getWtAgentIdentity } from "../utils/identity-helper
 import {
   ensureRemoteSession,
   describeRemote,
+  listRemotes,
   shutdownRemote,
   runShell,
 } from "../utils/opencode-remote.ts"
@@ -17,15 +18,23 @@ export const list_sessions = tool({
   description: "List wt_agent sessions.",
   args: {},
   async execute(_args, context) {
-    // session name not needed for listing, but keep identity check to ensure context
+    // Exclude the current session and return all other known remotes.
     const sessionName = await wtAgentSession(context)
+    // Keep identity check to ensure context is valid
     await getWtAgentIdentity(context)
 
-    const info = describeRemote(sessionName)
-    if (!info) return "No sessions"
-    return info.active
-      ? `Session ${sessionName} active at ${info.url}`
-      : `Session ${sessionName} exists but not active`
+    const rems = listRemotes()
+    const others = rems.filter((r) => r.name !== sessionName)
+    if (!others || others.length === 0) return "No sessions"
+
+    return others
+      .map((info) =>
+        info.active
+          ? `Session ${info.name} active at ${info.url}`
+          : `Session ${info.name} exists but not active`
+      )
+      .join("\n\n")
+      + "Use the 'wt_agent_send_prompt' tool to instruct the agent, or wt_agent_worktree_jump_in to check its worktree."
   },
 })
 
@@ -87,36 +96,36 @@ export const send_prompt = tool({
   },
 })
 
-export const worktree_opt_in = tool({
-  description: "Opt into/out of a wt_agent's worktree. Check wt_agent's work before merging into main.",
+export const worktree_jump_in = tool({
+  description: "Jump in/out of a wt_agent's worktree. Check wt_agent's work before merging into main.",
   args: {
-    session_id: tool.schema.string().describe("The session ID to opt into the wt_agent's worktree; leave empty to switch back to main"),
+    session_id: tool.schema.string().describe("The session ID to jump into the wt_agent's worktree; leave empty to switch back to main"),
   },
   async execute(args, context) {
-    // Allow calling with no session_id or an empty string to opt out (switch back to non-worktree)
+    // Allow calling with no session_id or an empty string to jump out (back to non-worktree)
     const raw = (args as any)?.session_id as unknown;
     const session_id = typeof raw === "string" ? raw.trim() : raw ? String(raw).trim() : "";
 
-    // Opt-out: no session id provided -> switch back to non-worktree
+    // Jump out: no session id provided -> switch back to non-worktree
     if (!session_id) {
       const current = (context as any).sessionID as string | undefined;
       if (!current) {
-        throw new Error("No session context available to opt out")
+        throw new Error("No session context available to jump out")
       }
       if (isWtAgentSession(current)) {
         throw new Error("Cannot switch a wt_agent to a the main session; wt_agents always use worktrees.")
       }
       optOutOfWorktree(current);
-      return `Switched back to the main, non-worktree session`;
+      return `Jumped back to the main, non-worktree session`;
     }
 
-    // Check if this is a wt_agent session - if so, deny opt-in
+    // Check if this is a wt_agent session - if so, deny jumping in
     if (isWtAgentSession(session_id)) {
-      throw new Error("Worktree opt-in is not available for wt_agent sessions.")
+      throw new Error("Worktree jumping is not available for wt_agent sessions.")
     }
 
     optInToWorktree(session_id)
-    return `Switched into wt_agent's worktree: ${session_id}`
+    return `Jumped into wt_agent's worktree: ${session_id}`
   },
 })
 
