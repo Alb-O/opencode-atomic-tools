@@ -1,7 +1,10 @@
+
 import path from "path";
+import { promises as fs } from "fs";
 import { ensureBranchExists, worktreeAdd } from "./git-helpers.ts";
 import { setSessionWorktree, getSessionWorktree } from "./worktree-session.ts";
 import { getAgentIdentity } from "./identity-helper.ts";
+import { AGENT_DIR, WORKTREE_DIR } from "./constants.ts";
 
 export interface WorktreeContextInput {
   sessionID: string;
@@ -32,7 +35,12 @@ function normalizeTarget(root: string, file: string) {
 export async function resolveWorktreeContext(input: WorktreeContextInput): Promise<WorktreeContext> {
   const identity = await getAgentIdentity({ sessionID: input.sessionID, agent: input.agent });
   const name = `${identity.middleName}-${identity.hash}`;
-  const worktreePath = path.join(".agent", "wt", name);
+  const worktreePath = path.join(AGENT_DIR, WORKTREE_DIR, name);
+  const wtRoot = path.join(AGENT_DIR, WORKTREE_DIR);
+  await fs.mkdir(wtRoot, { recursive: true });
+  const gitignorePath = path.join(wtRoot, ".gitignore");
+  // Write with 'wx' so we don't overwrite an existing .gitignore. Ignore errors.
+  await fs.writeFile(gitignorePath, "*\n", { flag: "wx" }).catch(() => undefined);
   await ensureBranchExists(identity.branchName);
   await worktreeAdd(worktreePath, identity.branchName).catch(() => undefined);
   setSessionWorktree(input.sessionID, worktreePath);
