@@ -43,16 +43,6 @@ export default async function atomicToolsPlugin(input: PluginInput) {
           }
         }
       }
-      // Also change the process working directory for shells so that tools
-      // which rely on process.cwd() (or that don't pass cwd) execute in
-      // the worktree. Only do this for interactive shell tool runs.
-      try {
-        if (name === "bash" || name === "shell") {
-          process.chdir(cwd);
-        }
-      } catch (e) {
-        // ignore chdir errors
-      }
     },
     "tool.execute.after": async (
       details: { tool: string; sessionID: string; callID: string },
