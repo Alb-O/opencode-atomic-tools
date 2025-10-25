@@ -3,6 +3,7 @@ import path from "path";
 import { createTwoFilesPatch } from "diff";
 import { getAgentIdentity } from "../utils/identity-helper.ts";
 import { ensureBranchExists, worktreeAdd, commitFile } from "../utils/git-helpers.ts";
+import { setSessionWorktree } from "../utils/worktree-session.ts";
 import { mkdir } from "fs/promises";
 import { setNote } from "../utils/edit-notes.ts";
 
@@ -65,6 +66,14 @@ export const AtomicEdit: Plugin = async () => {
         await worktreeAdd(worktreePath, branchName);
       } catch (e) {
         // ignore if already exists
+      }
+
+      // remember mapping of session -> worktree so subsequent shell commands
+      // execute inside the worktree
+      try {
+        setSessionWorktree(context.sessionID, worktreePath);
+      } catch (e) {
+        // ignore
       }
 
       const fullPath = path.join(worktreePath, rel);

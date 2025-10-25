@@ -1,9 +1,8 @@
+import path from "path";
 import writeAndCommitPlugin from "./atomic-write.ts";
 import editAndCommitPlugin from "./atomic-edit.ts";
 import { takeNote } from "../utils/edit-notes.ts";
-import { getAgentIdentity } from "../utils/identity-helper.ts";
-import path from "path";
-import { stat } from "fs/promises";
+import { getSessionWorktree } from "../utils/worktree-session.ts";
 import type { PluginInput } from "@opencode-ai/plugin";
 
 export default async function atomicToolsPlugin(input: PluginInput) {
@@ -17,22 +16,42 @@ export default async function atomicToolsPlugin(input: PluginInput) {
     },
     "tool.execute.before": async (
       details: { tool: string; sessionID: string; callID: string },
-      input: any,
+      state: { args: any },
     ) => {
+      if (!state) {
+        return;
+      }
+      const wt = getSessionWorktree(details.sessionID);
+      if (!wt) {
+        return;
+      }
+      const root = input.directory;
+      const cwd = path.isAbsolute(wt) ? wt : path.join(root, wt);
+      const args = state.args;
+      if (!args || typeof args !== "object") {
+        return;
+      }
+      (args as Record<string, unknown>).cwd = cwd;
+      const name = details.tool.toLowerCase();
+      if (name === "bash") {
+        const command = (args as Record<string, unknown> & { command?: unknown }).command;
+        if (typeof command === "string" && command.trim().length) {
+          const quoted = JSON.stringify(cwd);
+          const prefix = `cd ${quoted} && `;
+          if (!command.startsWith(prefix)) {
+            (args as Record<string, unknown> & { command?: unknown }).command = `${prefix}(${command})`;
+          }
+        }
+      }
+      // Also change the process working directory for shells so that tools
+      // which rely on process.cwd() (or that don't pass cwd) execute in
+      // the worktree. Only do this for interactive shell tool runs.
       try {
-        const args = (input && input.args) ? input.args as Record<string, unknown> : {};
-        const identity = await getAgentIdentity({ sessionID: details.sessionID, agent: "" });
-        const worktreeName = `${(identity as any).middleName}-${(identity as any).hash}`;
-        const worktreePath = path.join(".agent", "worktrees", worktreeName);
-        try {
-          await stat(worktreePath);
-          args.cwd = worktreePath;
-          if (input) input.args = args;
-        } catch (e) {
-          // worktree doesn't exist, leave cwd untouched
+        if (name === "bash" || name === "shell") {
+          process.chdir(cwd);
         }
       } catch (e) {
-        // ignore errors here - don't block tool execution
+        // ignore chdir errors
       }
     },
     "tool.execute.after": async (

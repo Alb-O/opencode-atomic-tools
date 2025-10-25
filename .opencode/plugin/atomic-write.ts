@@ -2,6 +2,7 @@ import { tool } from "@opencode-ai/plugin";
 import path from "path";
 import { getAgentIdentity } from "../utils/identity-helper.ts";
 import { ensureBranchExists, worktreeAdd, commitFile } from "../utils/git-helpers.ts";
+import { setSessionWorktree } from "../utils/worktree-session.ts";
 import { mkdir } from "fs/promises";
 import { setNote } from "../utils/edit-notes.ts";
 
@@ -51,6 +52,13 @@ export default async function writeAndCommitPlugin() {
         await worktreeAdd(worktreePath, branchName);
       } catch (e) {
         // ignore if already exists
+      }
+
+      // Record session -> worktree mapping so future shell tools run inside it
+      try {
+        setSessionWorktree(context.sessionID, worktreePath);
+      } catch (e) {
+        // ignore
       }
 
       const fullPath = path.join(worktreePath, rel);
