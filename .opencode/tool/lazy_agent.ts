@@ -4,7 +4,6 @@ import {
   ensureRemoteSession,
   describeRemote,
   shutdownRemote,
-  queueInput,
   runShell,
   captureOutput,
 } from "../utils/opencode-remote.ts"
@@ -44,12 +43,11 @@ export const new_session = tool({
     }
     const sessionName = await agentSession(context)
     // Ensure an opencode remote session exists for this agent (starts server + session)
-    await ensureRemoteSession(sessionName)
+  await ensureRemoteSession(sessionName)
 
-    // Queue the initial prompt for the detached agent to consume later when active.
-    await queueInput(sessionName, initial_prompt)
-
-    return `Session ${sessionName} created`
+  const reply = await runShell(sessionName, initial_prompt)
+  if (reply && reply !== "No messages") return reply
+  return `Session ${sessionName} created`
   },
 })
 
@@ -101,8 +99,9 @@ export const send_prompt = tool({
     const info = describeRemote(sessionName)
     if (!info || !info.active) return `Session ${sessionName} not running`
 
-    await runShell(sessionName, sessionName, prompt)
-    return `Prompt sent to ${sessionName}`
+  const reply = await runShell(sessionName, prompt)
+    if (reply && reply !== "No messages") return reply
+    return `Session ${sessionName} responded without text`
   },
 })
 

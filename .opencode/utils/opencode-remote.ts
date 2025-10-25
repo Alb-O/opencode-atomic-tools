@@ -1,6 +1,9 @@
 import net from "node:net";
 import { createOpencodeClient } from "@opencode-ai/sdk";
-import type { SessionMessagesResponse, Part } from "@opencode-ai/sdk";
+import type {
+  SessionMessagesResponse,
+  Part,
+} from "@opencode-ai/sdk";
 
 type Remote = {
   port: number;
@@ -92,7 +95,7 @@ async function waitForReady(client: ReturnType<typeof createOpencodeClient>) {
     }
     await Bun.sleep(200);
   }
-  throw new Error("Remote opencode server did not become ready in time");
+  throw new Error("Remote opencode server did not get ready in time");
 }
 
 async function ensureServer(name: string): Promise<Remote> {
@@ -116,6 +119,7 @@ async function ensureServer(name: string): Promise<Remote> {
   const remote: Remote = { port, proc, client };
   remotes.set(name, remote);
   await waitForReady(client).catch(async (error) => {
+    console.error(`[opencode-remote] ensureServer(${name}): server did not become ready: ${String(error)}`);
     proc.kill();
     remotes.delete(name);
     throw error;
@@ -126,14 +130,19 @@ async function ensureServer(name: string): Promise<Remote> {
 async function ensureSession(name: string): Promise<RemoteSession> {
   const remote = await ensureServer(name);
   if (!remote.sessionId) {
-    const result = await remote.client.session.create({
-      body: { title: `Lazy Agent ${name}` },
-      responseStyle: "data",
+    // Create a session with a concise log on success/failure.
+    const payload = { title: `Lazy Agent ${name}` };
+    const result = await remote.client.session.create({ body: payload, responseStyle: "data" }).catch((err) => {
+      throw err;
     });
-    if ("data" in result && result.data) {
-      remote.sessionId = result.data.id;
+
+    // Normalise a few common response shapes and extract session id.
+    const r = result as any;
+    const found = r?.id ?? r?.data?.id ?? r?.session?.id ?? r?.data?.session?.id;
+    if (typeof found === "string") {
+      remote.sessionId = found;
     } else {
-      throw new Error(`Failed to create session: ${String((result as any).error ?? "unknown")}`);
+      throw new Error("Failed to create session");
     }
   }
   return remote as RemoteSession;
@@ -197,18 +206,113 @@ export async function flushInput(name: string) {
   return text;
 }
 
-export async function runShell(name: string, agent: string, command: string) {
+export async function runShell(name: string, command: string, agent = "build") {
   const remote = await ensureSession(name);
-  await remote.client.session.shell({
-    path: { id: remote.sessionId },
-    body: { agent, command },
-    responseStyle: "data",
-  });
+
+  try {
+    const promptBody = {
+      agent,
+      parts: [
+        {
+          type: "text" as const,
+          text: command,
+        },
+      ],
+    };
+
+    // Send the prompt once. Keep polling the session messages for the reply.
+    let resp: any = undefined;
+    try {
+      resp = await remote.client.session.prompt({ path: { id: remote.sessionId }, body: promptBody, responseStyle: "data" });
+    } catch (err) {
+      if (!alive(remote.proc)) {
+        throw new Error(`Remote process died while prompting (port=${remote.port} session=${remote.sessionId})`);
+      }
+      throw err;
+    }
+
+    // Try to extract text parts from the prompt response first and if
+    // nothing is present, poll session.messages for a short timeout.
+    function extractTextFromMessages(maybe: any) {
+      try {
+        // Support multiple shapes:
+        // - { data: Message[] }
+        // - Message[]
+        // - { parts: Part[] } (single message shape returned by prompt)
+        let rows: SessionMessagesResponse = [];
+        if (maybe == null) {
+          rows = [];
+        } else if (Array.isArray(maybe)) {
+          rows = maybe;
+        } else if ("data" in maybe && Array.isArray(maybe.data)) {
+          rows = maybe.data;
+        } else if (Array.isArray((maybe as any).parts)) {
+          // single message returned with top-level parts
+          rows = [{ info: (maybe as any).info ?? {}, parts: (maybe as any).parts } as any];
+        } else if (Array.isArray((maybe as any).parts ?? (maybe as any).parts)) {
+          rows = [{ info: (maybe as any).info ?? {}, parts: (maybe as any).parts } as any];
+        } else {
+          rows = [];
+        }
+
+        const text = rows
+          .flatMap((entry) => (entry && Array.isArray(entry.parts) ? entry.parts : []))
+          // Accept any part that contains a string `text` field OR a `value` field
+          .map((p) => {
+            if (!p || typeof p !== "object") return "";
+            const t = (p as any).text;
+            if (typeof t === "string" && t.length > 0) return t;
+            const v = (p as any).value;
+            if (typeof v === "string" && v.length > 0) return v;
+            return "";
+          })
+          .filter((v) => v && v.length > 0)
+          .join("\n")
+          .trim();
+        return text || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Try to extract from the immediate response
+    const immediate = extractTextFromMessages(resp);
+    if (immediate) return immediate;
+
+    // Poll the messages endpoint for a short period to wait for the agent reply
+    const pollAttempts = 50; // ~10 seconds @ 200ms
+    for (let i = 0; i < pollAttempts; i++) {
+      try {
+        // If the remote process died while waiting, abort with clear error
+        if (!alive(remote.proc)) {
+          throw new Error(`Remote process died while waiting for response (port=${remote.port} session=${remote.sessionId})`);
+        }
+
+        await Bun.sleep(200);
+        const m = await remote.client.session.messages({ path: { id: remote.sessionId }, responseStyle: "data" });
+        const t = extractTextFromMessages(m);
+        if (t) {
+          return t;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // If we still have no text, return a clear sentinel similar to captureOutput.
+    return "No messages";
+  } catch (err) {
+    throw err;
+  }
 }
 
-function isTextPart(part: Part): part is Extract<Part, { type: "text"; text: string }> {
-  const maybe = (part as unknown as { text?: unknown }).text;
-  return part.type === "text" && typeof maybe === "string";
+function isTextPart(part: Part): part is Extract<Part, { type: "text"; text: string } | { type: "text"; value: string }> {
+  // Accept parts that have either `text` or `value` string properties.
+  if (part.type !== "text") return false;
+  const asAny = part as unknown as { text?: unknown; value?: unknown };
+  if (typeof asAny.text === "string" && asAny.text.length > 0) return true;
+  if (typeof asAny.value === "string" && asAny.value.length > 0) return true;
+  return false;
 }
 
 export async function captureOutput(name: string, limit: number) {
@@ -221,7 +325,12 @@ export async function captureOutput(name: string, limit: number) {
   const text = rows
     .flatMap((entry) => entry.parts ?? [])
     .filter(isTextPart)
-    .map((part) => part.text)
+    .map((part) => {
+      if (typeof part.text === "string" && part.text.length > 0) return part.text;
+      const alt = (part as unknown as { value?: string }).value;
+      if (typeof alt === "string" && alt.length > 0) return alt;
+      return "";
+    })
     .filter((value) => value.length > 0)
     .join("\n");
   if (!text) {
