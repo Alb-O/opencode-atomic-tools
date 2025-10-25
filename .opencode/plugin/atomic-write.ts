@@ -1,10 +1,9 @@
 import { tool } from "@opencode-ai/plugin";
 import path from "path";
-import { getAgentIdentity } from "../utils/identity-helper.ts";
-import { ensureBranchExists, worktreeAdd, commitFile } from "../utils/git-helpers.ts";
-import { setSessionWorktree } from "../utils/worktree-session.ts";
+import { commitFile } from "../utils/git-helpers.ts";
 import { mkdir } from "fs/promises";
 import { setNote } from "../utils/edit-notes.ts";
+import { resolveWorktreeContext } from "../utils/worktree.ts";
 
 type MetaInput = {
   title?: string;
@@ -28,49 +27,24 @@ export default async function writeAndCommitPlugin() {
         .string()
         .optional()
         .describe(
-          "One-line desc of what edit you're making and why; used for commit message (keep it technical)",
+          "One-line desc of what edit you're making and why; used for commit message (keep it technical, reference API, functions, signatures, etc.)",
         ),
     },
     async execute(args, context) {
       const file = args.filePath;
       const body = args.content;
 
-      const identity = await getAgentIdentity({ sessionID: context.sessionID, agent: context.agent });
-      const { branchName, userName, userEmail, middleName, hash } = identity as any;
-
-      // Worktree path per session
-      const worktreeName = `${middleName}-${hash}`;
-      const worktreePath = path.join(".agent", "worktrees", worktreeName);
-
-      const absolute = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
-      const root = path.isAbsolute(worktreePath) ? worktreePath : path.resolve(process.cwd(), worktreePath);
-      const rel = (() => {
-        const relWork = path.relative(root, absolute);
-        if (!relWork.startsWith("..")) {
-          return relWork;
-        }
-        const relRoot = path.relative(process.cwd(), absolute) || absolute;
-        if (relRoot.startsWith("..")) {
-          return path.basename(absolute);
-        }
-        return relRoot;
-      })();
+      const info = await resolveWorktreeContext({
+        sessionID: context.sessionID,
+        agent: context.agent,
+        filePath: file,
+      });
+      const rel = info.relativePath;
+      const worktreePath = info.worktreePath;
+      const branchName = info.branchName;
+      const userName = info.userName;
+      const userEmail = info.userEmail;
       const desc = args.description || `Create ${rel}`;
-
-      // Ensure branch exists and add worktree (no-op if already present)
-      await ensureBranchExists(branchName);
-      try {
-        await worktreeAdd(worktreePath, branchName);
-      } catch (e) {
-        // ignore if already exists
-      }
-
-      // Record session -> worktree mapping so future shell tools run inside it
-      try {
-        setSessionWorktree(context.sessionID, worktreePath);
-      } catch (e) {
-        // ignore
-      }
 
       const fullPath = path.join(worktreePath, rel);
       await mkdir(path.dirname(fullPath), { recursive: true });
@@ -79,7 +53,7 @@ export default async function writeAndCommitPlugin() {
       const diff = await commitFile(rel, desc, userName, userEmail, worktreePath);
 
       const title = rel;
-  const output = `File written and committed: ${rel} on branch ${branchName}`;
+      const output = `File written and committed: ${rel} on branch ${branchName}`;
       const meta = { filePath: rel, diff };
 
       const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;

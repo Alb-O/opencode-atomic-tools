@@ -12,13 +12,17 @@ async function runTmux(cmd: string[]) {
   return { stdout: out, stderr: err, exitCode: proc.exitCode }
 }
 
+async function agentSession(context: { sessionID: string; agent: string }) {
+  const identity = await getAgentIdentity(context)
+  return `${identity.middleName}-${identity.hash}`
+}
+
 export const list_sessions = tool({
   description: "List tmux sessions for this agent",
   args: {},
   async execute(_args, context) {
-    const identity = await getAgentIdentity(context)
     // session name not needed for listing, but keep identity check to ensure context
-    void identity
+    await getAgentIdentity(context)
 
     const { stdout, stderr, exitCode } = await runTmux(["tmux", "ls"]) 
     if (exitCode !== 0) {
@@ -37,8 +41,7 @@ export const new_session = tool({
   },
   async execute(args, context) {
     const { command_to_run, attach } = args
-    const identity = await getAgentIdentity(context)
-    const sessionName = `${identity.middleName}-${identity.hash}`
+    const sessionName = await agentSession(context)
 
     const create = await runTmux(["tmux", "new-session", "-d", "-s", sessionName])
     if (create.exitCode !== 0) return `Error: ${create.stderr.trim()}`
@@ -60,8 +63,7 @@ export const kill_session = tool({
   description: "Kill this agent's tmux session",
   args: {},
   async execute(_args, context) {
-    const identity = await getAgentIdentity(context)
-    const sessionName = `${identity.middleName}-${identity.hash}`
+    const sessionName = await agentSession(context)
 
     const { stdout, stderr, exitCode } = await runTmux(["tmux", "kill-session", "-t", sessionName])
     if (exitCode !== 0) {
@@ -80,8 +82,7 @@ export const capture_pane = tool({
   },
   async execute(args, context) {
     const limit = (typeof args.limit === 'number' && args.limit > 0) ? Math.floor(args.limit) : 200
-    const identity = await getAgentIdentity(context)
-    const sessionName = `${identity.middleName}-${identity.hash}`
+    const sessionName = await agentSession(context)
 
     const check = await runTmux(["tmux", "has-session", "-t", sessionName])
     if (check.exitCode !== 0) {
@@ -110,8 +111,7 @@ export const send_keys = tool({
   async execute(args, context) {
     const { keys, send_enter } = args
     if (!keys) return "Error: keys are required"
-    const identity = await getAgentIdentity(context)
-    const sessionName = `${identity.middleName}-${identity.hash}`
+    const sessionName = await agentSession(context)
 
     const check = await runTmux(["tmux", "has-session", "-t", sessionName])
     if (check.exitCode !== 0) {

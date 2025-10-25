@@ -1,11 +1,10 @@
 import { type Plugin, tool } from "@opencode-ai/plugin";
 import path from "path";
 import { createTwoFilesPatch } from "diff";
-import { getAgentIdentity } from "../utils/identity-helper.ts";
-import { ensureBranchExists, worktreeAdd, commitFile } from "../utils/git-helpers.ts";
-import { setSessionWorktree } from "../utils/worktree-session.ts";
+import { commitFile } from "../utils/git-helpers.ts";
 import { mkdir } from "fs/promises";
 import { setNote } from "../utils/edit-notes.ts";
+import { resolveWorktreeContext } from "../utils/worktree.ts";
 
 type MetaInput = {
   title?: string;
@@ -36,7 +35,7 @@ export const AtomicEdit: Plugin = async () => {
         .string()
         .optional()
         .describe(
-          "One-line desc of what edit you're making and why; used for commit message (keep it technical)",
+          "One-line desc of what edit you're making and why; used for commit message (keep it technical, reference API, functions, signatures, etc.)",
         ),
     },
     async execute(args, context) {
@@ -44,43 +43,17 @@ export const AtomicEdit: Plugin = async () => {
       const old = args.oldString;
       const value = args.newString;
       const all = args.replaceAll ?? false;
-      const identity = await getAgentIdentity({ sessionID: context.sessionID, agent: context.agent });
-      const { branchName, userName, userEmail, middleName, hash } = identity as any;
-
-      // Worktree path per session
-      const worktreeName = `${middleName}-${hash}`;
-      const worktreePath = path.join(".agent", "worktrees", worktreeName);
-
-      const absolute = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
-      const root = path.isAbsolute(worktreePath) ? worktreePath : path.resolve(process.cwd(), worktreePath);
-      const rel = (() => {
-        const relWork = path.relative(root, absolute);
-        if (!relWork.startsWith("..")) {
-          return relWork;
-        }
-        const relRoot = path.relative(process.cwd(), absolute) || absolute;
-        if (relRoot.startsWith("..")) {
-          return path.basename(absolute);
-        }
-        return relRoot;
-      })();
+      const info = await resolveWorktreeContext({
+        sessionID: context.sessionID,
+        agent: context.agent,
+        filePath: file,
+      });
+      const rel = info.relativePath;
+      const worktreePath = info.worktreePath;
+      const branchName = info.branchName;
+      const userName = info.userName;
+      const userEmail = info.userEmail;
       const desc = args.description || `Update ${rel}`;
-
-      // Ensure branch exists and add worktree
-      await ensureBranchExists(branchName);
-      try {
-        await worktreeAdd(worktreePath, branchName);
-      } catch (e) {
-        // ignore if already exists
-      }
-
-      // remember mapping of session -> worktree so subsequent shell commands
-      // execute inside the worktree
-      try {
-        setSessionWorktree(context.sessionID, worktreePath);
-      } catch (e) {
-        // ignore
-      }
 
       const fullPath = path.join(worktreePath, rel);
       await mkdir(path.dirname(fullPath), { recursive: true });
@@ -107,9 +80,9 @@ export const AtomicEdit: Plugin = async () => {
         return `${curr.slice(0, index)}${value}${curr.slice(index + old.length)}`;
       })();
 
-    await Bun.write(path.join(worktreePath, rel), body);
-    const raw = createTwoFilesPatch(file, file, curr, body);
-    const diff = (() => {
+      await Bun.write(path.join(worktreePath, rel), body);
+      const raw = createTwoFilesPatch(rel, rel, curr, body);
+      const diff = (() => {
         const lines = raw.split("\n");
         const content = lines.filter(
           (line) =>
@@ -142,10 +115,10 @@ export const AtomicEdit: Plugin = async () => {
           })
           .join("\n");
       })();
-  await commitFile(rel, desc, userName, userEmail, worktreePath);
+      await commitFile(rel, desc, userName, userEmail, worktreePath);
 
-  const title = rel;
-  const output = `File edited and committed: ${rel} on branch ${branchName}`;
+      const title = rel;
+      const output = `File edited and committed: ${rel} on branch ${branchName}`;
       const meta = { filePath: rel, diff };
 
       const hook = (context as unknown as { metadata?: (input: MetaInput) => void | Promise<void> }).metadata;
