@@ -1,8 +1,7 @@
-
 import path from "path";
 import { promises as fs } from "fs";
 import { ensureBranchExists, worktreeAdd } from "./git-helpers.ts";
-import { setSessionWorktree, getSessionWorktree } from "./worktree-session.ts";
+import { setSessionWorktree, getSessionWorktree, isWtAgentSession, hasOptedInToWorktree } from "./worktree-session.ts";
 import { getAgentIdentity } from "./identity-helper.ts";
 import { AGENT_DIR, WORKTREE_DIR } from "./constants.ts";
 
@@ -63,12 +62,36 @@ export interface WorktreeWrapperInput {
   rootDirectory: string;
 }
 
-export function wrapToolCallWithWorktree(input: WorktreeWrapperInput): void {
+const MSG_WORKTREE_NOT_READY = "The agent is starting; please wait or focus on another task.";
+const MSG_WORKTREE_NO_DIR = (sessionID: string) =>
+  `Worktree for session ${sessionID} exists but has no directory yet. ${MSG_WORKTREE_NOT_READY}`;
+const MSG_WORKTREE_NOT_CREATED = (sessionID: string) =>
+  `Worktree for session ${sessionID} hasn't been created yet. ${MSG_WORKTREE_NOT_READY}`;
+
+export async function wrapToolCallWithWorktree(
+  input: WorktreeWrapperInput
+): Promise<string | void> {
   const wt = getSessionWorktree(input.sessionID);
+
   if (!wt) {
+    if (isWtAgentSession(input.sessionID) || hasOptedInToWorktree(input.sessionID)) {
+      return MSG_WORKTREE_NOT_CREATED(input.sessionID);
+    }
     return;
   }
+
   const cwd = path.isAbsolute(wt) ? wt : path.join(input.rootDirectory, wt);
+
+  // Check that the worktree directory actually exists before wrapping.
+  try {
+    const st = await fs.stat(cwd);
+    if (!st.isDirectory()) {
+      return MSG_WORKTREE_NO_DIR(input.sessionID);
+    }
+  } catch (_err) {
+    return MSG_WORKTREE_NOT_CREATED(input.sessionID);
+  }
+
   input.args.cwd = cwd;
   const name = input.tool.toLowerCase();
   if (name === "bash") {

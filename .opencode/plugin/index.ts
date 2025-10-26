@@ -25,12 +25,18 @@ export default async function wtAgentPlugin(input: PluginInput) {
       }
       // Enable worktree wrapping for wt_agent sessions OR sessions that have opted in
       if (isWtAgentSession(details.sessionID) || hasOptedInToWorktree(details.sessionID)) {
-        wrapToolCallWithWorktree({
+        const msg = await wrapToolCallWithWorktree({
           sessionID: details.sessionID,
           tool: details.tool,
           args: state.args,
           rootDirectory: input.directory,
         });
+        if (typeof msg === "string") {
+          // If the worktree isn't ready yet, return the message so the main
+          // agent can report it to the user and avoid running the tool in a
+          // non-existent directory.
+          return msg;
+        }
       }
     },
     "tool.execute.after": async (
